@@ -45,8 +45,8 @@ Rigidbody:
   m_GameObject: {fileID: 112766983740180011}
   serializedVersion: 5
   m_Mass: 300
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_LinearDamping: 0.5
+  m_AngularDamping: 4
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -70,7 +70,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 112766983740180011}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: 4b5c568b5ade91046aa48c5ba72fe9d4, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0

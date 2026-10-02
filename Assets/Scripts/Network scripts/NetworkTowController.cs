@@ -7,8 +7,8 @@ public class NetworkTowController : NetworkBehaviour
     [Header("Towing Settings")]
     public float attachRadius = 15f;
     public float maxRopeLength = 12f;
-    public float springForce = 6000f;
-    public float springDamper = 600f;
+    public float springForce = 8000f;
+    public float springDamper = 1500f;
 
     [Header("Visual Settings")]
     public Transform ropeFirePoint;
@@ -87,7 +87,7 @@ public class NetworkTowController : NetworkBehaviour
 
                     // Thiết lập vật lý dây
                     activeJoint.maxDistance = maxRopeLength;
-                    activeJoint.minDistance = 5f; // Chống hút dính: Không cho kéo quá gần 5 mét
+                    activeJoint.minDistance = 3f; // Chống hút dính: Không cho kéo quá gần 5 mét
                     activeJoint.spring = springForce;
                     activeJoint.damper = springDamper;
                     activeJoint.enableCollision = true;
