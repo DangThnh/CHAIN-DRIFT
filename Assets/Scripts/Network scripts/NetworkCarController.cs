@@ -66,12 +66,25 @@ public class NetworkCarController : NetworkBehaviour
     private float pitchInertiaMultiplier = 0f;
     private float lastMoveInput = 0f;
 
+    [Header("Power-Ups: ENHANCE (Juggernaut)")]
+    public GameObject armorMesh;        // Kéo cái Armor_Mesh vừa tạo vào đây
+    public float armorDuration = 8f;    // Thời gian tác dụng (8 giây)
+    public float armoredMassMultiplier = 5f; // Gấp 5 lần trọng lượng
+
+    // Biến mạng lưu trạng thái xem xe có đang Cường Hóa không
+    [Networked] public NetworkBool IsArmored { get; set; }
+
+    private float armorTimer = 0f;
+    private float originalMass;
+
 
 
 
     public override void Spawned()
     {
         rb = GetComponent<Rigidbody>();
+        originalMass = rb.mass; // LƯU LẠI KHỐI LƯỢNG GỐC
+
         rb.centerOfMass = new Vector3(0, -0.5f, 0);
 
         if (HasInputAuthority)
@@ -121,6 +134,21 @@ public class NetworkCarController : NetworkBehaviour
             moveInput = 0; steerInput = 0; isDrifting = false;
         }
 
+        if (Object.HasStateAuthority)
+        {
+            if (IsArmored)
+            {
+                armorTimer -= Runner.DeltaTime;
+                if (armorTimer <= 0)
+                {
+                    IsArmored = false;
+                    rb.mass = originalMass; // Trả lại 1000kg
+                    Debug.Log(">> SERVER: XE ĐÃ HẾT CƯỜNG HÓA! <<");
+                }
+            }
+        }
+
+
         // 2. TÍNH TOÁN VẬT LÝ (Chạy đồng thời trên cả Host và Client để đồng bộ dự đoán)
         currentSpeedKmh = rb.linearVelocity.magnitude * 3.6f;
         groundedWheels = 0;
@@ -160,6 +188,17 @@ public class NetworkCarController : NetworkBehaviour
     public override void Render()
     {
         // NetworkRigidbody tự động lo việc làm mượt vị trí xe thông qua cục Interpolation Target.
+
+        // BẬT TẮT BỘ GIÁP DỰA VÀO BIẾN MẠNG
+        if (armorMesh != null)
+        {
+            // Nếu IsArmored = true thì bật Mesh, ngược lại tắt Mesh
+            if (armorMesh.activeSelf != IsArmored)
+            {
+                armorMesh.SetActive(IsArmored);
+            }
+        }
+
         // Ở đây chúng ta CHỈ lo phần hiệu ứng hình ảnh:
         UpdateWheelVisuals();
         UpdateChassisVisuals();
@@ -379,4 +418,40 @@ public class NetworkCarController : NetworkBehaviour
         }
     }
 
+
+    // Hàm này chạy trên Server khi xe ăn được hộp
+    public void ActivateArmor()
+    {
+        if (!Object.HasStateAuthority) return;
+
+        IsArmored = true;
+        armorTimer = armorDuration;
+        rb.mass = originalMass * armoredMassMultiplier; // Bơm trọng lượng lên 5000kg!
+
+        Debug.Log(">> SERVER: XE ĐÃ ĐƯỢC CƯỜNG HÓA! TRỌNG LƯỢNG X5! <<");
+    }
+
+    // Xử lý va chạm vật lý thô (Chạy trên Host)
+    void OnCollisionEnter(Collision collision)
+    {
+        if (!Object.HasStateAuthority) return;
+
+        // Nếu xe đang Bọc Thép và tông trúng một vật thể...
+        if (IsArmored)
+        {
+            // Kiểm tra xem vật thể đó có phải là Tường vỡ hoặc Mảnh vỡ không
+            DestructibleObject wall = collision.gameObject.GetComponent<DestructibleObject>();
+            DebrisOptimizer debris = collision.gameObject.GetComponent<DebrisOptimizer>();
+
+            if (wall != null || debris != null)
+            {
+                // Ép lực đâm xuyên (Momentum Boost):
+                // Bơm một lực đẩy cực mạnh vào thân xe hướng thẳng tới trước, 
+                // bù đắp lại 100% lực cản của bức tường, giúp xe lướt qua như xe tăng!
+                rb.AddForce(transform.forward * (acceleration * 10f), ForceMode.Impulse);
+
+                Debug.Log(">> JUGGERNAUT HÚC TƯỜNG! <<");
+            }
+        }
+    }
 }

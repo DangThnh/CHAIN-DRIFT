@@ -15,16 +15,33 @@ public class DestructibleObject : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        // Chống gọi hàm 2 lần
         if (isBroken) return;
 
-        // KIỂM TRA ĐIỀU KIỆN 1: Phải là khối Cargo
+        bool canBreakIt = false;
+
+        // ĐIỀU KIỆN 1: Nếu là Khối hàng (Cargo) đụng vào -> Cho phép đập vỡ
         if (collision.gameObject.CompareTag(breakerTag))
         {
-            // KIỂM TRA ĐIỀU KIỆN 2: Tốc độ va chạm (Tạo cảm giác chân thực)
+            canBreakIt = true;
+        }
+        // ĐIỀU KIỆN 2: Nếu là Xe của người chơi đụng vào...
+        else
+        {
+            // Kiểm tra xem chiếc xe đó có đang "Bọc Thép" không?
+            NetworkCarController car = collision.gameObject.GetComponentInParent<NetworkCarController>();
+            if (car != null && car.IsArmored)
+            {
+                canBreakIt = true;
+            }
+        }
+
+        // TIẾN HÀNH ĐẬP VỠ NẾU ĐẠT ĐIỀU KIỆN
+        if (canBreakIt)
+        {
             float impactSpeed = collision.relativeVelocity.magnitude;
 
-            if (impactSpeed >= minImpactSpeed)
+            // Xe bọc thép húc tường thường bị giảm tốc, ta hạ chuẩn tốc độ vỡ xuống một chút cho sướng
+            if (impactSpeed >= (minImpactSpeed * 0.5f))
             {
                 BreakIt(collision.contacts[0].point, collision.relativeVelocity);
             }

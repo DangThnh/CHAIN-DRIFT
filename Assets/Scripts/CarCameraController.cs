@@ -130,36 +130,56 @@ public class CarCameraController : MonoBehaviour
         smoothedSpeed = Mathf.Lerp(smoothedSpeed, actualSpeed, 3f * Time.deltaTime);
         float speedRatio = Mathf.Clamp01(smoothedSpeed / maxSpeedKmh);
 
-        // 2. CHỐNG GIẬT DỌC
+        // 2. CHỐNG GIẬT DỌC CỦA XE (Vertical Jitter Fix)
         smoothedY = Mathf.Lerp(smoothedY, carTarget.position.y, verticalDamp * Time.deltaTime);
         Vector3 basePos = new Vector3(carTarget.position.x, smoothedY, carTarget.position.z);
 
-        // 3. TÍNH TOÁN GÓC VĂNG DRIFT
+        // 3. TÍNH TOÁN GÓC VĂNG DRIFT (SWING)
         float targetSwingAngle = 0f;
-
         if (smoothedSpeed > 10f)
         {
             Vector3 flatVelocity = new Vector3(carRb.linearVelocity.x, 0, carRb.linearVelocity.z).normalized;
             Vector3 flatForward = new Vector3(carTarget.forward.x, 0, carTarget.forward.z).normalized;
-
             float slipAngle = Vector3.SignedAngle(flatForward, flatVelocity, Vector3.up);
 
             if (Vector3.Dot(carTarget.forward, carRb.linearVelocity) < -0.1f) slipAngle = 0f;
 
             targetSwingAngle = Mathf.Clamp(slipAngle * swingMultiplier, -maxSwingAngle, maxSwingAngle);
         }
-
         currentSwingAngle = Mathf.Lerp(currentSwingAngle, targetSwingAngle, swingSmoothSpeed * Time.deltaTime);
 
-        // 4. ĐỊNH VỊ CAMERA
-        Vector3 backwardDir = -carTarget.forward;
+        // ====================================================================
+        // 4. ĐỊNH VỊ CAMERA MỚI (CHỐNG LÚN ĐẤT KHI LEO DỐC / BỐC ĐẦU)
+        // ====================================================================
+
+        // BÍ QUYẾT: Ép vector Forward của xe phải song song với mặt đất!
+        // Dù xe có bốc đầu lên trời 90 độ, đuôi xe cũng KHÔNG kéo camera xuống đất.
+        Vector3 flatCarForward = new Vector3(carTarget.forward.x, 0f, carTarget.forward.z).normalized;
+
+        // Tính toán khoảng cách xa/gần
+        float finalDistance = currentTargetDistance + (speedRatio * extraDistanceAtMaxSpeed);
+
+        // Đặt vector neo sau lưng xe (tính trên mặt phẳng)
+        Vector3 backwardDir = -flatCarForward * finalDistance;
+
+        // Áp dụng góc Swing (Drift)
         backwardDir = Quaternion.Euler(0, currentSwingAngle, 0) * backwardDir;
 
-        float finalDistance = currentTargetDistance + (speedRatio * extraDistanceAtMaxSpeed);
-        transform.position = basePos + (backwardDir * finalDistance) + (Vector3.up * currentTargetHeight);
+        // Vị trí Camera = (Tọa độ X, Z của xe) + Khoảng cách lùi + Độ cao an toàn (Tính từ gầm xe)
+        Vector3 targetCamPos = basePos + backwardDir;
 
-        // 5. KHÓA MỤC TIÊU
-        Vector3 targetLookAt = basePos + (carTarget.up * lookAtHeightOffset);
+        // BÍ QUYẾT 2: KHÓA CHẶT ĐỘ CAO (FLOOR CLAMPING)
+        // Camera luôn phải cao hơn gầm xe một khoảng bằng currentTargetHeight, 
+        // tuyệt đối không bị dìm xuống theo độ dốc của địa hình.
+        targetCamPos.y = basePos.y + currentTargetHeight;
+
+        transform.position = targetCamPos;
+
+        // ====================================================================
+
+        // 5. KHÓA MỤC TIÊU NHÌN (LOOK AT)
+        // Để camera nhìn xe tự nhiên hơn, điểm nhìn cũng phải dựa trên basePos mượt
+        Vector3 targetLookAt = basePos + (Vector3.up * lookAtHeightOffset);
         transform.LookAt(targetLookAt);
 
         // 6. CẬP NHẬT FOV
