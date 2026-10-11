@@ -94,7 +94,9 @@ public class NetworkTowController : NetworkBehaviour
 
                     Debug.Log(">> SERVER: ĐÃ KẾT NỐI DÂY XÍCH THÀNH CÔNG! <<");
                     break;
+
                 }
+                GetComponent<NetworkCarController>().IsTowingCargo = true;
             }
         }
     }
@@ -107,6 +109,8 @@ public class NetworkTowController : NetworkBehaviour
         }
         AttachedCargo = null;
         Debug.Log(">> SERVER: ĐÃ THÁO DÂY XÍCH! <<");
+
+        GetComponent<NetworkCarController>().IsTowingCargo = false;
     }
 
     public override void Render()

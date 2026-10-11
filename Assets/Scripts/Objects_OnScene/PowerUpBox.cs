@@ -42,17 +42,19 @@ public class PowerUpBox : NetworkBehaviour
         // Dùng GetComponentInParent để dò tìm từ gầm xe lên tận gốc Root
         NetworkCarController car = other.GetComponentInParent<NetworkCarController>();
 
-        if (car != null)
+        if (car != null && car.IsTowingCargo == false)
         {
             car.ActivateArmor();
-
             isHidden = true;
             hideTimer = respawnTime;
         }
+
         else
         {
             // Debug xem nó đụng trúng cái gì mà không tìm ra xe
             Debug.Log("Hộp chạm vào cái gì đó không phải là xe: " + other.gameObject.name);
         }
+
+
     }
 }

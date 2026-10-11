@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 756351750634931919}
   - component: {fileID: 1249982067136655805}
   - component: {fileID: 5551566036634933749}
+  - component: {fileID: 42364507137447817}
   m_Layer: 0
   m_Name: Cargo_root
   m_TagString: Cargo
@@ -119,7 +120,25 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 1249982067136655805}
+  - {fileID: 42364507137447817}
   ForceRemoteRenderTimeframe: 0
+--- !u!114 &42364507137447817
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 112766983740180011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 943f00fcc3635084d915161cc1391f11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CargoManager
+  maxHealth: 1000
+  _CurrentHealth: 0
+  cargoMesh: {fileID: 7174731885614205783}
+  normalMat: {fileID: 2100000, guid: b35b1d035bec90243845d45f04d21d3b, type: 2}
+  damagedMat: {fileID: 2100000, guid: 2c0468b21b48cdd43a3574169f39b757, type: 2}
 --- !u!1001 &596928739334720410
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -184,5 +203,10 @@ PrefabInstance:
 --- !u!4 &5903930220003473220 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6459937335038754014, guid: 5b7acb22f7941914783cda3f82d37181, type: 3}
+  m_PrefabInstance: {fileID: 596928739334720410}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &7174731885614205783 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 7771369232086892749, guid: 5b7acb22f7941914783cda3f82d37181, type: 3}
   m_PrefabInstance: {fileID: 596928739334720410}
   m_PrefabAsset: {fileID: 0}

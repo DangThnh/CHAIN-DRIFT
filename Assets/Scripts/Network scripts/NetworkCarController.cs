@@ -70,6 +70,7 @@ public class NetworkCarController : NetworkBehaviour
     public GameObject armorMesh;        // Kéo cái Armor_Mesh vừa tạo vào đây
     public float armorDuration = 8f;    // Thời gian tác dụng (8 giây)
     public float armoredMassMultiplier = 5f; // Gấp 5 lần trọng lượng
+    public Material armorMaterial;
 
     // Biến mạng lưu trạng thái xem xe có đang Cường Hóa không
     [Networked] public NetworkBool IsArmored { get; set; }
@@ -77,7 +78,20 @@ public class NetworkCarController : NetworkBehaviour
     private float armorTimer = 0f;
     private float originalMass;
 
+    [Header("Anti-Rollover")]
+    public float flipDelay = 2.0f;     // Lật ngửa 2 giây sẽ tự cứu
+    public float flipForce = 15f;      // Lực búng xe lên không trung để lật lại
+    private float rolloverTimer = 0f;
 
+    public enum PlayerTeam { Defender, Hunter }
+
+    [Header("PvP Settings")]
+    [Networked] public PlayerTeam MyTeam { get; set; } // Lưu phe của xe
+    [Networked] public NetworkBool IsTowingCargo { get; set; } // Đang kéo xe hàng?
+
+    public MeshRenderer carBodyRenderer;
+    public Material defenderMaterial; // Màu Xanh
+    public Material hunterMaterial;   // Màu Đỏ 
 
 
     public override void Spawned()
@@ -183,6 +197,43 @@ public class NetworkCarController : NetworkBehaviour
             HandleSteering();
             HandleTraction();
         }
+
+        // ========================================================
+        // HỆ THỐNG CHỐNG LẬT (CHỈ HOẠT ĐỘNG KHI NẰM TRÊN MẶT ĐẤT)
+        // ========================================================
+        float rollAngle = transform.eulerAngles.z;
+        float pitchAngle = transform.eulerAngles.x;
+
+        if (rollAngle > 180) rollAngle -= 360;
+        if (pitchAngle > 180) pitchAngle -= 360;
+
+        // Kiểm tra xem xe có đang ngửa bụng không
+        bool isUpsideDown = Mathf.Abs(rollAngle) > 70f || Mathf.Abs(pitchAngle) > 70f;
+
+        // BÍ QUYẾT BẮT ĐẤT: Bắn 1 tia Raycast ngắn (1.5m) TỪ TÂM XE lên TRÊN NÓC XE (Vì nó đang lật ngửa, nóc xe sẽ chĩa xuống đất)
+        bool isRoofTouchingGround = Physics.Raycast(transform.position, transform.up, 1.5f, drivableLayer);
+
+        // Bơm bộ đếm nếu: Xe bị ngửa VÀ nóc xe/thân xe đang chạm đất
+        if (isUpsideDown && isRoofTouchingGround)
+        {
+            rolloverTimer += Runner.DeltaTime;
+
+            if (rolloverTimer >= flipDelay)
+            {
+                // BÚNG XE LÊN TRỜI VÀ LẬT LẠI!
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+
+                transform.position += Vector3.up * 2f;
+                transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
+
+                rolloverTimer = 0f;
+            }
+        }
+        else
+        {
+            rolloverTimer = 0f;
+        }
     }
 
     public override void Render()
@@ -190,13 +241,15 @@ public class NetworkCarController : NetworkBehaviour
         // NetworkRigidbody tự động lo việc làm mượt vị trí xe thông qua cục Interpolation Target.
 
         // BẬT TẮT BỘ GIÁP DỰA VÀO BIẾN MẠNG
-        if (armorMesh != null)
+        if (armorMesh != null) armorMesh.SetActive(IsArmored);
+
+        // ĐỔI MÀU SƠN XE DỰA TRÊN PHE (Nếu không bị bọc thép)
+        if (carBodyRenderer != null && !IsArmored)
         {
-            // Nếu IsArmored = true thì bật Mesh, ngược lại tắt Mesh
-            if (armorMesh.activeSelf != IsArmored)
-            {
-                armorMesh.SetActive(IsArmored);
-            }
+            if (MyTeam == PlayerTeam.Defender && carBodyRenderer.material != defenderMaterial)
+                carBodyRenderer.material = defenderMaterial;
+            else if (MyTeam == PlayerTeam.Hunter && carBodyRenderer.material != hunterMaterial)
+                carBodyRenderer.material = hunterMaterial;
         }
 
         // Ở đây chúng ta CHỈ lo phần hiệu ứng hình ảnh:
@@ -431,26 +484,36 @@ public class NetworkCarController : NetworkBehaviour
         Debug.Log(">> SERVER: XE ĐÃ ĐƯỢC CƯỜNG HÓA! TRỌNG LƯỢNG X5! <<");
     }
 
-    // Xử lý va chạm vật lý thô (Chạy trên Host)
     void OnCollisionEnter(Collision collision)
     {
         if (!Object.HasStateAuthority) return;
 
-        // Nếu xe đang Bọc Thép và tông trúng một vật thể...
         if (IsArmored)
         {
-            // Kiểm tra xem vật thể đó có phải là Tường vỡ hoặc Mảnh vỡ không
             DestructibleObject wall = collision.gameObject.GetComponent<DestructibleObject>();
-            DebrisOptimizer debris = collision.gameObject.GetComponent<DebrisOptimizer>();
-
-            if (wall != null || debris != null)
+            if (wall != null)
             {
-                // Ép lực đâm xuyên (Momentum Boost):
-                // Bơm một lực đẩy cực mạnh vào thân xe hướng thẳng tới trước, 
-                // bù đắp lại 100% lực cản của bức tường, giúp xe lướt qua như xe tăng!
-                rb.AddForce(transform.forward * (acceleration * 10f), ForceMode.Impulse);
+                rb.AddForce(transform.forward * (acceleration * 2f), ForceMode.Impulse);
+            }
 
-                Debug.Log(">> JUGGERNAUT HÚC TƯỜNG! <<");
+            // ==========================================
+            // LOGIC MỚI: TÔNG KHỐI HÀNG ĐỂ TRỪ MÁU!
+            // ==========================================
+            CargoManager cargo = collision.gameObject.GetComponentInParent<CargoManager>();
+            if (cargo != null)
+            {
+                // Lấy lực tông (Tốc độ tương đối x Trọng lượng xe)
+                float impactForce = collision.relativeVelocity.magnitude;
+
+                // Nếu tông đủ mạnh (> 10km/h)
+                if (impactForce > 10f)
+                {
+                    float damage = impactForce * 10f; // VD: Tốc độ 50 -> Gây 500 máu
+                    cargo.RPC_TakeDamage(damage);
+
+                    // Tạo lực nảy dội ra để xe không dính chặt vào Cargo
+                    rb.AddForce(-transform.forward * 5000f, ForceMode.Impulse);
+                }
             }
         }
     }

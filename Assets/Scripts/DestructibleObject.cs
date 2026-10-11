@@ -3,48 +3,49 @@
 public class DestructibleObject : MonoBehaviour
 {
     [Header("Fracture Settings")]
-    public GameObject fracturedPrefab;  // Kéo Prefab bức tường vỡ vào đây
-    public float breakForce = 500f;     // Lực văng của các mảnh vỡ
-    public float explosionRadius = 5f;  // Bán kính vụ nổ mảnh vỡ
+    public GameObject fracturedPrefab;
+    public float breakForce = 500f;
+    public float explosionRadius = 5f;
 
     [Header("Requirement")]
-    public string breakerTag = "Cargo"; // CHỈ CÓ CARGO mới phá được
-    public float minImpactSpeed = 5f;   // (Tùy chọn) Cargo phải đi đủ nhanh mới vỡ tường
+    public string breakerTag = "Cargo";
+    // Bỏ minImpactSpeed đi vì dùng Trigger không đo được lực va chạm ngay lập tức
 
     private bool isBroken = false;
 
-    void OnCollisionEnter(Collision collision)
+    // DÙNG TRIGGER ĐỂ BẮT VA CHẠM TRƯỚC KHI VẬT LÝ KỊP PHẢN LỰC
+    void OnTriggerEnter(Collider other)
     {
         if (isBroken) return;
 
         bool canBreakIt = false;
 
-        // ĐIỀU KIỆN 1: Nếu là Khối hàng (Cargo) đụng vào -> Cho phép đập vỡ
-        if (collision.gameObject.CompareTag(breakerTag))
+        // ĐIỀU KIỆN 1: Là khối Cargo
+        if (other.CompareTag(breakerTag))
         {
             canBreakIt = true;
         }
-        // ĐIỀU KIỆN 2: Nếu là Xe của người chơi đụng vào...
+        // ĐIỀU KIỆN 2: Là xe của người chơi đang Bọc Thép
         else
         {
-            // Kiểm tra xem chiếc xe đó có đang "Bọc Thép" không?
-            NetworkCarController car = collision.gameObject.GetComponentInParent<NetworkCarController>();
+            NetworkCarController car = other.GetComponentInParent<NetworkCarController>();
             if (car != null && car.IsArmored)
             {
                 canBreakIt = true;
             }
         }
 
-        // TIẾN HÀNH ĐẬP VỠ NẾU ĐẠT ĐIỀU KIỆN
         if (canBreakIt)
         {
-            float impactSpeed = collision.relativeVelocity.magnitude;
+            // Lấy vận tốc của vật thể tông vào để ép gạch văng theo hướng đó
+            Vector3 impactVel = Vector3.zero;
+            Rigidbody hitRb = other.attachedRigidbody;
+            if (hitRb != null) impactVel = hitRb.linearVelocity;
 
-            // Xe bọc thép húc tường thường bị giảm tốc, ta hạ chuẩn tốc độ vỡ xuống một chút cho sướng
-            if (impactSpeed >= (minImpactSpeed * 0.5f))
-            {
-                BreakIt(collision.contacts[0].point, collision.relativeVelocity);
-            }
+            // Điểm va chạm mô phỏng (lấy tọa độ của vật đụng vào)
+            Vector3 impactPoint = other.ClosestPoint(transform.position);
+
+            BreakIt(impactPoint, impactVel);
         }
     }
 
@@ -52,24 +53,22 @@ public class DestructibleObject : MonoBehaviour
     {
         isBroken = true;
 
-        // 1. Sinh ra bức tường vỡ tại đúng vị trí và góc xoay của tường gốc
         GameObject fracturedObj = Instantiate(fracturedPrefab, transform.position, transform.rotation);
 
-        // 2. Tìm tất cả các mảnh vỡ bên trong để áp dụng lực
         Rigidbody[] debrisRbs = fracturedObj.GetComponentsInChildren<Rigidbody>();
         foreach (Rigidbody rb in debrisRbs)
         {
-            // Áp dụng lực nổ từ điểm va chạm để các mảnh vỡ văng tung tóe
             rb.AddExplosionForce(breakForce, impactPoint, explosionRadius);
 
-            // Ép thêm quán tính của xe hàng vào mảnh vỡ (xe lao tới trước thì gạch văng tới trước)
-            rb.linearVelocity = impactVelocity * 0.5f;
+            // Ép mảnh vỡ bay theo hướng xe đang lao tới
+            rb.linearVelocity = impactVelocity * 0.8f;
 
-            // THÊM SCRIPT TỐI ƯU VÀO TỪNG MẢNH VỠ (Cực kỳ quan trọng)
+            // Giảm khối lượng gạch xuống cực nhẹ để xe lướt qua không bị kẹt
+            rb.mass = 0.1f;
+
             rb.gameObject.AddComponent<DebrisOptimizer>();
         }
 
-        // 3. Tiêu diệt bức tường nguyên vẹn
         Destroy(gameObject);
     }
 }

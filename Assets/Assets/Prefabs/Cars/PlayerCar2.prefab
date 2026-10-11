@@ -904,8 +904,17 @@ MonoBehaviour:
   armorMesh: {fileID: 5115140893024825715}
   armorDuration: 8
   armoredMassMultiplier: 5
+  armorMaterial: {fileID: 2100000, guid: fdeae8401ebecd041aa8ec73d7463503, type: 2}
   _IsArmored:
     RawValue: 0
+  flipDelay: 2
+  flipForce: 15
+  _MyTeam: 0
+  _IsTowingCargo:
+    RawValue: 0
+  carBodyRenderer: {fileID: 1229283026555937797}
+  defenderMaterial: {fileID: 2100000, guid: 14d27015f63f40b4cb45bd766fbc0edc, type: 2}
+  hunterMaterial: {fileID: 2100000, guid: c96a2d39285d5b24a83b965520ac37e9, type: 2}
 --- !u!114 &8463299411808601177
 MonoBehaviour:
   m_ObjectHideFlags: 0
