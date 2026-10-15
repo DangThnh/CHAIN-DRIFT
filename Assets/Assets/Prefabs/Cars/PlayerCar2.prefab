@@ -909,12 +909,18 @@ MonoBehaviour:
     RawValue: 0
   flipDelay: 2
   flipForce: 15
-  _MyTeam: 0
+  _MyTeam: 1
   _IsTowingCargo:
     RawValue: 0
   carBodyRenderer: {fileID: 1229283026555937797}
   defenderMaterial: {fileID: 2100000, guid: 14d27015f63f40b4cb45bd766fbc0edc, type: 2}
   hunterMaterial: {fileID: 2100000, guid: c96a2d39285d5b24a83b965520ac37e9, type: 2}
+  normalMaterial: {fileID: 2100000, guid: c4a0f9baf4ba3064cac96c169fc22904, type: 2}
+  maxHealth: 500
+  _CurrentHealth: 0
+  _IsDead:
+    RawValue: 0
+  respawnDelay: 2
 --- !u!114 &8463299411808601177
 MonoBehaviour:
   m_ObjectHideFlags: 0

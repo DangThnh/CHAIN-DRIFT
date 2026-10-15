@@ -19,6 +19,14 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
     public Transform[] playerSpawnPoints; // Kéo 4 cái Spawn_1,2,3,4 vào đây
     public Transform cargoSpawnPoint;     // Kéo cái Cargo_Spawn vào đây
 
+    [Header("PvP Test Settings")]
+    [Tooltip("Phe mặc định của máy Chủ (Host)")]
+    public NetworkCarController.PlayerTeam hostTeam = NetworkCarController.PlayerTeam.Defender;
+
+    public enum TestMode { SameTeam, HostVsClient }
+    [Tooltip("Chế độ Test: Cùng phe hay Đối đầu?")]
+    public TestMode teamTestMode = TestMode.HostVsClient;
+
     private void OnGUI()
     {
         if (_runner == null)
@@ -67,20 +75,48 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
         {
             Debug.Log($"Người chơi {player} đã vào phòng! Đang tạo nhân vật...");
 
-            // Lấy vị trí an toàn từ danh sách (Nếu vượt quá số lượng thì quay vòng)
-            Vector3 spawnPos = Vector3.zero;
-            if (playerSpawnPoints != null && playerSpawnPoints.Length > 0)
+            float xOffset = (player.RawEncoded % 4) * 4f;
+            Vector3 spawnPosition = new Vector3(xOffset, 1, 0);
+
+            // 1. Sinh xe và lưu vào biến carObj
+            NetworkObject carObj = runner.Spawn(playerPrefab, spawnPosition, Quaternion.identity, player);
+
+            // ========================================================
+            // 2. LOGIC CHIA PHE (CHỈ SERVER MỚI ĐƯỢC QUYẾT ĐỊNH)
+            // ========================================================
+            if (carObj != null)
             {
-                int index = player.PlayerId % playerSpawnPoints.Length;
-                spawnPos = playerSpawnPoints[index].position;
+                NetworkCarController carCtrl = carObj.GetComponent<NetworkCarController>();
+                if (carCtrl != null)
+                {
+                    if (player == runner.LocalPlayer)
+                    {
+                        // Nếu là Host: Lấy phe mặc định
+                        carCtrl.MyTeam = hostTeam;
+                    }
+                    else
+                    {
+                        // Nếu là Client: Xét theo chế độ Test
+                        if (teamTestMode == TestMode.SameTeam)
+                        {
+                            carCtrl.MyTeam = hostTeam; // Cùng phe Host
+                        }
+                        else
+                        {
+                            // Khác phe Host (Đảo ngược)
+                            carCtrl.MyTeam = (hostTeam == NetworkCarController.PlayerTeam.Defender)
+                                ? NetworkCarController.PlayerTeam.Hunter
+                                : NetworkCarController.PlayerTeam.Defender;
+                        }
+                    }
+                }
             }
 
-            runner.Spawn(playerPrefab, spawnPos, Quaternion.identity, player);
-
-            // Sinh khối hàng (Chỉ sinh 1 lần duy nhất khi Host vào phòng)
+            // NẾU NGƯỜI VÀO PHÒNG LÀ HOST -> SINH RA KHỐI CARGO
             if (player == runner.LocalPlayer)
             {
-                Vector3 cargoPos = cargoSpawnPoint != null ? cargoSpawnPoint.position : new Vector3(0, 2, 30);
+                Debug.Log(">> ĐANG SINH RA KHỐI CARGO TRÊN MẠNG! <<");
+                Vector3 cargoPos = cargoSpawnPoint != null ? cargoSpawnPoint.position : new Vector3(0, 2, 20);
                 runner.Spawn(cargoPrefab, cargoPos, Quaternion.identity);
             }
         }

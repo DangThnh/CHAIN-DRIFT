@@ -63,6 +63,13 @@ public class NetworkTowController : NetworkBehaviour
 
     void TryAttachRope()
     {
+        NetworkCarController myCar = GetComponent<NetworkCarController>();
+        if (myCar != null && myCar.MyTeam == NetworkCarController.PlayerTeam.Hunter)
+        {
+            Debug.Log(">> TỪ CHỐI: Phe Phá Đám không được phép kéo hàng! <<");
+            return; // Thoát hàm ngay lập tức
+        }
+
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, attachRadius);
         foreach (var hit in hitColliders)
         {
@@ -147,5 +154,11 @@ public class NetworkTowController : NetworkBehaviour
             pointPos.y -= Mathf.Sin(t * Mathf.PI) * currentSag;
             lineRenderer.SetPosition(i, pointPos);
         }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    public void RPC_ForceDetach()
+    {
+        DetachRope();
     }
 }

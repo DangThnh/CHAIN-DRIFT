@@ -59,6 +59,10 @@ public class NetworkCarController : NetworkBehaviour
     private int groundedWheels;
     private float currentSpeedKmh;
 
+    // Biến theo dõi xem thân xe có đang cạ xuống đất không
+    private bool isBodyTouchingGround = false;
+    private float bodyTouchResetTimer = 0f;
+
     private float currentWheelSpin = 0f;
     private float currentRoll = 0f;
     private float currentPitch = 0f;
@@ -93,6 +97,18 @@ public class NetworkCarController : NetworkBehaviour
     public Material defenderMaterial; // Màu Xanh
     public Material hunterMaterial;   // Màu Đỏ 
 
+    public Material normalMaterial;   // Màu gốc (không cường hóa)
+
+    [Header("Health & Combat")]
+    public float maxHealth = 100f;
+    [Networked] public float CurrentHealth { get; set; }
+    [Networked] public NetworkBool IsDead { get; set; }
+
+    public float respawnDelay = 2.0f;
+    private float respawnTimer = 0f;
+
+    // Biến lưu trữ Material gốc để làm hiệu ứng nhấp nháy đỏ
+    private Material currentBlinkColor;
 
     public override void Spawned()
     {
@@ -130,10 +146,31 @@ public class NetworkCarController : NetworkBehaviour
                 }
             }
         }
+
+        if (Object.HasStateAuthority)
+        {
+            CurrentHealth = maxHealth;
+            IsDead = false;
+        }
     }
 
     public override void FixedUpdateNetwork()
     {
+
+        // === NẾU XE CHẾT: TẮT NÚT BẤM, ĐẾM NGƯỢC HỒI SINH ===
+        if (IsDead)
+        {
+            if (Object.HasStateAuthority)
+            {
+                respawnTimer -= Runner.DeltaTime;
+                if (respawnTimer <= 0) Respawn();
+            }
+            return; // NGẮT HÀM TẠI ĐÂY! Không chạy raycast, không lái xe!
+        }
+
+        bodyTouchResetTimer -= Runner.DeltaTime;
+        if (bodyTouchResetTimer <= 0) isBodyTouchingGround = false;
+
         // 1. ĐỌC DỮ LIỆU INPUT
         // Trên Host: GetInput lấy dữ liệu của Client gửi lên.
         // Trên Client: GetInput lấy dữ liệu phím cục bộ để chạy Client-Side Prediction!
@@ -199,7 +236,7 @@ public class NetworkCarController : NetworkBehaviour
         }
 
         // ========================================================
-        // HỆ THỐNG CHỐNG LẬT (CHỈ HOẠT ĐỘNG KHI NẰM TRÊN MẶT ĐẤT)
+        // HỆ THỐNG CHỐNG LẬT (CHUẨN VẬT LÝ CỦA CẬU)
         // ========================================================
         float rollAngle = transform.eulerAngles.z;
         float pitchAngle = transform.eulerAngles.x;
@@ -207,14 +244,14 @@ public class NetworkCarController : NetworkBehaviour
         if (rollAngle > 180) rollAngle -= 360;
         if (pitchAngle > 180) pitchAngle -= 360;
 
-        // Kiểm tra xem xe có đang ngửa bụng không
         bool isUpsideDown = Mathf.Abs(rollAngle) > 70f || Mathf.Abs(pitchAngle) > 70f;
 
-        // BÍ QUYẾT BẮT ĐẤT: Bắn 1 tia Raycast ngắn (1.5m) TỪ TÂM XE lên TRÊN NÓC XE (Vì nó đang lật ngửa, nóc xe sẽ chĩa xuống đất)
-        bool isRoofTouchingGround = Physics.Raycast(transform.position, transform.up, 1.5f, drivableLayer);
+        // ĐIỀU KIỆN KÍCH HOẠT VÀNG:
+        // 1. Xe bị nghiêng ngửa
+        // 2. Không có bánh nào chạm đất (để tránh chống lật khi đang leo vách núi nghiêng)
+        // 3. THÂN XE ĐANG NẰM CẠ XUỐNG MẶT ĐẤT (isBodyTouchingGround = true)
 
-        // Bơm bộ đếm nếu: Xe bị ngửa VÀ nóc xe/thân xe đang chạm đất
-        if (isUpsideDown && isRoofTouchingGround)
+        if (isUpsideDown && groundedWheels == 0 && isBodyTouchingGround)
         {
             rolloverTimer += Runner.DeltaTime;
 
@@ -224,14 +261,16 @@ public class NetworkCarController : NetworkBehaviour
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
 
-                transform.position += Vector3.up * 2f;
+                transform.position += Vector3.up * 2.5f; // Búng cao lên chút để không vướng đất
                 transform.rotation = Quaternion.Euler(0, transform.eulerAngles.y, 0);
 
                 rolloverTimer = 0f;
+                Debug.Log(">> LẬT XE THÀNH CÔNG NHỜ CHẠM ĐẤT! <<");
             }
         }
         else
         {
+            // Nếu xe đang bay trên không, hoặc đã đứng thẳng, reset bộ đếm!
             rolloverTimer = 0f;
         }
     }
@@ -240,16 +279,45 @@ public class NetworkCarController : NetworkBehaviour
     {
         // NetworkRigidbody tự động lo việc làm mượt vị trí xe thông qua cục Interpolation Target.
 
-        // BẬT TẮT BỘ GIÁP DỰA VÀO BIẾN MẠNG
-        if (armorMesh != null) armorMesh.SetActive(IsArmored);
-
-        // ĐỔI MÀU SƠN XE DỰA TRÊN PHE (Nếu không bị bọc thép)
-        if (carBodyRenderer != null && !IsArmored)
+        // 1. NẾU CHẾT: GIẤU HOÀN TOÀN CỤC VISUALS
+        if (chassisMesh != null)
         {
-            if (MyTeam == PlayerTeam.Defender && carBodyRenderer.material != defenderMaterial)
-                carBodyRenderer.material = defenderMaterial;
-            else if (MyTeam == PlayerTeam.Hunter && carBodyRenderer.material != hunterMaterial)
-                carBodyRenderer.material = hunterMaterial;
+            // Lấy cục Gốc của Visuals (Chứa cả vỏ lẫn bánh xe)
+            GameObject visualsRoot = chassisMesh.parent.gameObject;
+            visualsRoot.SetActive(!IsDead);
+        }
+
+        // Nếu xe chết thì bỏ qua vẽ bánh xe và vệt lốp
+        if (IsDead) return;
+
+        if (armorMesh != null)
+        {
+            if (armorMesh.activeSelf != IsArmored)
+            {
+                armorMesh.SetActive(IsArmored);
+            }
+        }
+
+        // 2. LOGIC MÀU SƠN VÀ NHẤP NHÁY ĐỎ KHI SẮP CHẾT (< 30% MÁU)
+        if (carBodyRenderer != null)
+        {
+            Material targetMat = normalMaterial;
+            if (IsArmored) targetMat = armorMaterial;
+            else if (MyTeam == PlayerTeam.Defender) targetMat = defenderMaterial;
+            else if (MyTeam == PlayerTeam.Hunter) targetMat = hunterMaterial;
+
+            // Hiệu ứng nhấp nháy đỏ khẩn cấp (Dùng hàm Lerp màu)
+            if (CurrentHealth > 0 && CurrentHealth <= (maxHealth * 0.3f))
+            {
+                // Chớp tắt liên tục giữa màu gốc và Màu Đỏ
+                float blink = Mathf.PingPong(Time.time * 5f, 1f);
+                carBodyRenderer.material.color = Color.Lerp(targetMat.color, Color.red, blink);
+            }
+            else
+            {
+                // Khôi phục material gốc nếu máu an toàn
+                if (carBodyRenderer.material != targetMat) carBodyRenderer.material = targetMat;
+            }
         }
 
         // Ở đây chúng ta CHỈ lo phần hiệu ứng hình ảnh:
@@ -490,6 +558,7 @@ public class NetworkCarController : NetworkBehaviour
 
         if (IsArmored)
         {
+            // 1. Logic húc tường vụn (Giữ nguyên)
             DestructibleObject wall = collision.gameObject.GetComponent<DestructibleObject>();
             if (wall != null)
             {
@@ -497,24 +566,119 @@ public class NetworkCarController : NetworkBehaviour
             }
 
             // ==========================================
-            // LOGIC MỚI: TÔNG KHỐI HÀNG ĐỂ TRỪ MÁU!
+            // 2. LOGIC HÚC KHỐI HÀNG (ĐÃ CẬP NHẬT FRIENDLY FIRE)
             // ==========================================
             CargoManager cargo = collision.gameObject.GetComponentInParent<CargoManager>();
             if (cargo != null)
             {
-                // Lấy lực tông (Tốc độ tương đối x Trọng lượng xe)
                 float impactForce = collision.relativeVelocity.magnitude;
 
-                // Nếu tông đủ mạnh (> 10km/h)
                 if (impactForce > 10f)
                 {
-                    float damage = impactForce * 10f; // VD: Tốc độ 50 -> Gây 500 máu
-                    cargo.RPC_TakeDamage(damage);
+                    // KIỂM TRA THẺ CĂN CƯỚC:
+                    // CHỈ CÓ PHE PHÁ ĐÁM (HUNTER) MỚI ĐƯỢC PHÉP RÚT MÁU KHỐI HÀNG!
+                    if (MyTeam == PlayerTeam.Hunter)
+                    {
+                        float damage = impactForce * 10f;
+                        cargo.RPC_TakeDamage(damage);
+                    }
+                    else
+                    {
+                        // Nếu là Defender húc vào: Không trừ máu, chỉ báo Debug
+                        Debug.Log(">> PHE BẢO VỆ VÔ TÌNH HÚC VÀO HÀNG! (Không mất máu) <<");
+                    }
 
-                    // Tạo lực nảy dội ra để xe không dính chặt vào Cargo
+                    // Tạo lực nảy dội ra để xe (dù là phe nào) cũng không dính chặt vào Cargo
                     rb.AddForce(-transform.forward * 5000f, ForceMode.Impulse);
                 }
             }
+            // ==========================================
+            // LOGIC HÚC XE ĐỐI PHƯƠNG
+            // ==========================================
+            NetworkCarController enemyCar = collision.gameObject.GetComponentInParent<NetworkCarController>();
+            if (enemyCar != null)
+            {
+                // CHỈ TRỪ MÁU NẾU KHÁC PHE (Chống Friendly Fire)
+                if (enemyCar.MyTeam != this.MyTeam)
+                {
+                    float impactForce = collision.relativeVelocity.magnitude;
+                    if (impactForce > 10f)
+                    {
+                        // Gây sát thương nặng (Tốc độ x 2)
+                        enemyCar.RPC_TakeDamage(impactForce * 2f);
+
+                        // Lực đẩy xe tăng xé gió
+                        rb.AddForce(transform.forward * (acceleration * 2f), ForceMode.Impulse);
+                        Debug.Log(">> BỌC THÉP HÚC VĂNG KẺ THÙ! <<");
+                    }
+                }
+            }
         }
+    }
+
+    // Hàm này chạy liên tục chừng nào xe còn đang cạ vào vật khác
+    void OnCollisionStay(Collision collision)
+    {
+        // Nếu cái thứ đang cạ vào có thuộc Layer mặt đường (DrivableLayer)
+        if (((1 << collision.gameObject.layer) & drivableLayer) != 0)
+        {
+            isBodyTouchingGround = true;
+            bodyTouchResetTimer = 0.1f; // Gia hạn thời gian chạm đất
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TakeDamage(float damage)
+    {
+        if (IsDead) return;
+
+        CurrentHealth -= damage;
+        Debug.Log($"[{MyTeam}] Xe bị húc! Máu còn: {CurrentHealth}");
+
+        if (CurrentHealth <= 0)
+        {
+            CurrentHealth = 0;
+            Die();
+        }
+    }
+
+    void Die()
+    {
+        IsDead = true;
+        respawnTimer = respawnDelay;
+
+        // NẾU ĐANG KÉO HÀNG MÀ CHẾT -> ÉP ĐỨT DÂY XÍCH NGAY LẬP TỨC!
+        NetworkTowController tow = GetComponent<NetworkTowController>();
+        if (tow != null) tow.RPC_ForceDetach(); // (Lát nữa ta sẽ viết hàm này bên TowController)
+
+        Debug.Log($"[{MyTeam}] XE ĐÃ NỔ TUNG! Chờ hồi sinh...");
+    }
+
+    void Respawn()
+    {
+        IsDead = false;
+        CurrentHealth = maxHealth;
+
+        // TÌM XE HÀNG ĐỂ TÍNH TOÁN VỊ TRÍ HỒI SINH
+        CargoManager cargo = FindObjectOfType<CargoManager>();
+        if (cargo != null)
+        {
+            // Lấy vị trí cách đuôi xe hàng 100 mét
+            Vector3 spawnPos = cargo.transform.position - (cargo.transform.forward * 100f);
+            spawnPos.y += 3f; // Thả từ trên cao 3m xuống cho an toàn khỏi kẹt đất
+
+            // Dịch chuyển xe
+            rb.position = spawnPos;
+            rb.rotation = cargo.transform.rotation;
+        }
+        else
+        {
+            rb.position = new Vector3(0, 3, 0); // Dự phòng nếu ko thấy khối hàng
+        }
+
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        Debug.Log($"[{MyTeam}] ĐÃ HỒI SINH CÁCH XE HÀNG 100M!");
     }
 }

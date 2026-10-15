@@ -37,24 +37,30 @@ public class PowerUpBox : NetworkBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        // Chỉ Host xử lý ăn hộp
         if (!Object.HasStateAuthority || isHidden) return;
 
-        // Dùng GetComponentInParent để dò tìm từ gầm xe lên tận gốc Root
         NetworkCarController car = other.GetComponentInParent<NetworkCarController>();
 
-        if (car != null && car.IsTowingCargo == false)
+        if (car != null)
         {
+            // TÌM SCRIPT KÉO HÀNG CỦA CHIẾC XE NÀY
+            NetworkTowController towCtrl = car.GetComponent<NetworkTowController>();
+
+            // BÍ QUYẾT FIX LỖI: Kiểm tra xem biến AttachedCargo có đang rỗng không
+            // Nếu không rỗng (Tức là ĐANG KÉO HÀNG) -> TỪ CHỐI CHO ĂN!
+            if (towCtrl != null && towCtrl.AttachedCargo != null)
+            {
+                Debug.Log(">> HỘP QUÀ TỪ CHỐI: XE NÀY ĐANG BẬN KÉO HÀNG! <<");
+                return; // Thoát hàm ngay lập tức
+            }
+
+            // Đạt điều kiện: Xe tự do -> Cho ăn!
             car.ActivateArmor();
+
+            // Ẩn hộp đi
             isHidden = true;
             hideTimer = respawnTime;
         }
-
-        else
-        {
-            // Debug xem nó đụng trúng cái gì mà không tìm ra xe
-            Debug.Log("Hộp chạm vào cái gì đó không phải là xe: " + other.gameObject.name);
-        }
-
-
     }
 }
