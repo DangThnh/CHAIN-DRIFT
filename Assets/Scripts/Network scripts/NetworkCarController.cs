@@ -95,6 +95,8 @@ public class NetworkCarController : NetworkBehaviour
     public float tracerDisplayTime = 0.05f; // Đạn chỉ chớp 0.05s rồi tắt
     private float tracerTimer = 0f;
 
+    // BIẾN MẠNG: Lưu vị trí mà đầu nòng súng đang nhắm tới để mọi máy cùng thấy
+    [Networked] public Vector3 NetGunLookTarget { get; set; }
     [Networked] public NetworkBool IsArmed { get; set; }
     private float gunTimer = 0f;
     private float nextFireTime = 0f;
@@ -231,15 +233,7 @@ public class NetworkCarController : NetworkBehaviour
         // ==========================================
         // CƠ CHẾ BẮN SÚNG HITSCAN (Chỉ người đang lái xe này mới được bắn)
         // ==========================================
-        if (IsArmed && HasInputAuthority)
-        {
-            // Bấm chuột trái để bắn
-            if (Input.GetMouseButton(0) && Time.time >= nextFireTime)
-            {
-                nextFireTime = Time.time + fireRate;
-                FireHitscanWeapon();
-            }
-        }
+        UpdateAimingTarget();
 
 
         // 2. TÍNH TOÁN VẬT LÝ (Chạy đồng thời trên cả Host và Client để đồng bộ dự đoán)
@@ -345,25 +339,19 @@ public class NetworkCarController : NetworkBehaviour
             bool showGun = IsArmed && !IsDead;
             if (gunTurretObj.activeSelf != showGun) gunTurretObj.SetActive(showGun);
 
-            // Xoay súng và Bật Crosshair (Chỉ chủ xe mới thấy)
-            if (showGun && HasInputAuthority)
+            // TẤT CẢ CÁC MÁY ĐỀU PHẢI XOAY SÚNG THEO BIẾN MẠNG NetGunLookTarget
+            if (showGun && NetGunLookTarget != Vector3.zero)
             {
-                if (crosshairUI != null && !crosshairUI.activeSelf) crosshairUI.SetActive(true);
-
-                // Ép nòng súng xoay nhìn theo Camera
-                Ray ray = mainCam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-                Vector3 lookPoint = ray.GetPoint(100f);
-                if (Physics.Raycast(ray, out RaycastHit hit, 200f, ~(1 << LayerMask.NameToLayer("Ignore Raycast"))))
+                Vector3 lookDir = NetGunLookTarget - gunTurretObj.transform.position;
+                if (lookDir != Vector3.zero)
                 {
-                    lookPoint = hit.point;
+                    // Xoay súng nhìn thẳng vào điểm ngắm
+                    Quaternion targetRot = Quaternion.LookRotation(lookDir);
+                    gunTurretObj.transform.rotation = Quaternion.Slerp(gunTurretObj.transform.rotation, targetRot, 20f * Time.deltaTime);
                 }
-                gunTurretObj.transform.LookAt(lookPoint);
             }
-            else
-            {
-                // Tắt Crosshair khi hết súng hoặc khi xe của người khác
-                if (crosshairUI != null && crosshairUI.activeSelf) crosshairUI.SetActive(false);
-            }
+
+            if (crosshairUI != null) crosshairUI.SetActive(showGun && HasInputAuthority);
         }
 
         // TẮT TIA ĐẠN SAU VÀI MILI GIÂY
@@ -764,56 +752,100 @@ public class NetworkCarController : NetworkBehaviour
         Debug.Log($"[{MyTeam}] ĐÃ HỒI SINH CÁCH XE HÀNG 100M!");
     }
 
-    void FireHitscanWeapon()
+    // ====================================================================
+    // CƠ CHẾ BẮN SÚNG & ĐỒNG BỘ GÓC NGẮM HOÀN CHỈNH
+    // ====================================================================
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    public void RPC_SyncAimPoint(Vector3 point)
     {
-        // Tia ngắm phóng thẳng từ Tâm màn hình Camera ra vô tận
+        NetGunLookTarget = point; // Server nhận và đồng bộ cho tất cả các máy
+    }
+
+    // 1. CẬP NHẬT GÓC NGẮM LIÊN TỤC TRONG FIXED UPDATE (KHÔNG CHỜ BẤM BẮN MỚI GỬI)
+    void UpdateAimingTarget()
+    {
+        if (!IsArmed || !HasInputAuthority || mainCam == null) return;
+
         Ray ray = mainCam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        Vector3 targetPoint = ray.GetPoint(500f);
+        Vector3 targetPoint = ray.GetPoint(200f);
 
-        // Quét xuyên mọi thứ TRỪ cái xe của mình (Tránh tự bắn vào mui xe)
-        int mask = ~(1 << LayerMask.NameToLayer("Ignore Raycast"));
-
-        if (Physics.Raycast(ray, out RaycastHit hitInfo, 500f, mask))
+        // Bắn tia từ Camera để tìm điểm trúng đạn
+        if (Physics.Raycast(ray, out RaycastHit hitInfo, 300f))
         {
-            targetPoint = hitInfo.point;
+            // Bỏ qua nếu tia vô tình chạm vào chính cái xe của người đang bắn
+            if (hitInfo.collider.transform.root != this.transform.root)
+            {
+                targetPoint = hitInfo.point;
+            }
         }
 
-        // Hướng bắn thật từ nòng súng
-        Vector3 fireDirection = (targetPoint - gunFirePoint.position).normalized;
+        NetGunLookTarget = targetPoint;
+        RPC_SyncAimPoint(targetPoint); // Gửi liên tục để máy bạn thấy súng quay mượt mà!
 
+        // Xử lý bắn khi đè chuột trái
+        if (Input.GetMouseButton(0) && Time.time >= nextFireTime)
+        {
+            nextFireTime = Time.time + fireRate;
+            FireHitscanWeapon(targetPoint);
+        }
+    }
+
+    void FireHitscanWeapon(Vector3 targetPoint)
+    {
+        Vector3 fireDirection = (targetPoint - gunFirePoint.position).normalized;
         RPC_FireGun(gunFirePoint.position, fireDirection);
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     public void RPC_FireGun(Vector3 firePos, Vector3 direction)
     {
-        // 1. TÍNH TOÁN SÁT THƯƠNG TRÊN SERVER
-        if (Physics.Raycast(firePos, direction, out RaycastHit hit, 200f))
+        // BÍ QUYẾT BẮT TRÚNG: Đẩy điểm bắt đầu của tia ra phía trước 2 mét
+        // để đạn không bao giờ va chạm vào chính chiếc xe của mình!
+        Vector3 rayStart = firePos + (direction * 2.0f);
+
+        // Quét một ống trụ bán kính 0.8m quét TẤT CẢ MỌI LAYER (Mask = -1)
+        if (Physics.SphereCast(rayStart, 0.8f, direction, out RaycastHit hit, 200f, -1))
         {
-            // Bắn Cargo
+            // IN LOG KIỂM TRA ĐẠN CHẠM VÀO ĐÂU
+            Debug.Log($"<color=white>[HITSCAN] Đạn vừa va chạm vào: <b>{hit.collider.name}</b> (Tag: {hit.collider.tag})</color>");
+
+            // 1. Kiểm tra trúng Khối hàng Cargo
             CargoManager cargo = hit.collider.GetComponentInParent<CargoManager>();
-            if (cargo != null && MyTeam == PlayerTeam.Hunter)
+            if (cargo != null)
             {
-                cargo.RPC_TakeDamage(gunDamage);
+                if (MyTeam == PlayerTeam.Hunter)
+                {
+                    cargo.RPC_TakeDamage(gunDamage);
+                    Debug.Log("<color=yellow><b>>> TRÚNG CARGO! ĐÃ TRỪ MÁU! <<</b></color>");
+                }
+                else
+                {
+                    Debug.Log("<color=cyan>[HITSCAN] Phe Bảo Vệ bắn trúng Cargo -> Miễn nhiễm sát thương.</color>");
+                }
             }
 
-            // Bắn Xe Đối Phương (Mọi phe đều có quyền bắn xe phe kia)
-            NetworkCarController enemyCar = hit.collider.GetComponentInParent<NetworkCarController>();
-            if (enemyCar != null && enemyCar != this)
+            // 2. Kiểm tra trúng Xe đối thủ
+            NetworkCarController hitCar = hit.collider.GetComponentInParent<NetworkCarController>();
+            if (hitCar != null && hitCar != this)
             {
-                if (enemyCar.MyTeam != this.MyTeam && !enemyCar.IsDead)
+                if (hitCar.MyTeam != this.MyTeam)
                 {
-                    enemyCar.RPC_TakeDamage(gunDamage);
-
-                    // (Tùy chọn: Thêm lực hất văng xe địch khi trúng đạn)
-                    Rigidbody enemyRb = enemyCar.GetComponent<Rigidbody>();
-                    if (enemyRb != null) enemyRb.AddForceAtPosition(direction * 5000f, hit.point, ForceMode.Impulse);
+                    hitCar.RPC_TakeDamage(gunDamage);
+                    Debug.Log($"<color=red><b>>> [CHÍ MẠNG] BẮN TRÚNG ĐỐI THỦ {hitCar.MyTeam}! ĐÃ TRỪ {gunDamage} HP! <<</b></color>");
+                }
+                else
+                {
+                    Debug.Log($"<color=green>[HITSCAN] Bắn trúng đồng đội {hitCar.MyTeam} -> Chống bắn nhầm (Friendly Fire)!</color>");
                 }
             }
         }
+        else
+        {
+            Debug.Log("<color=gray>[HITSCAN] Đạn bắn trượt vào không khí!</color>");
+        }
 
-        // 2. GỌI MỌI NGƯỜI CHƠI VẼ TIA ĐẠN BẰNG ĐỒ HỌA THẬT
-        RPC_DrawTracer(firePos, firePos + (direction * 200f));
+        RPC_DrawTracer(firePos, firePos + (direction * 150f));
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]

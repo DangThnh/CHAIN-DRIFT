@@ -8,32 +8,32 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_Cord
-    second: {fileID: 2100000, guid: a6beac55dba4f25428ecca5501136f71, type: 2}
+    second: {fileID: 2100000, guid: 5a4b064cc112236419cdeb4af1b48266, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_Lens
-    second: {fileID: 2100000, guid: 1d112fda8a08ce349b3aced4a2497d22, type: 2}
+    second: {fileID: 2100000, guid: 636f88dbee684b74f8dfdca2558589ed, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_Lid
-    second: {fileID: 2100000, guid: 1ce559f76e7d2e64caec940213757667, type: 2}
+    second: {fileID: 2100000, guid: ed0a1abc463d90a4c966afe58a68f3f7, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_Metal
-    second: {fileID: 2100000, guid: 36c8630571b6faf44ad2a960af8ff021, type: 2}
+    second: {fileID: 2100000, guid: 6839b91690039d54e9a744dbbc6163b4, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_RedLight
-    second: {fileID: 2100000, guid: 0c90f97ea967ce14f806de5bad648d32, type: 2}
+    second: {fileID: 2100000, guid: 36189a2479072f648bb408e4bf6c8228, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Turret_TeamColor
-    second: {fileID: 2100000, guid: a9011b04f87d8174d86a3e8b4d37a7e1, type: 2}
+    second: {fileID: 2100000, guid: 32b9db1dba5be5e4baa6b6a226dcbd39, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

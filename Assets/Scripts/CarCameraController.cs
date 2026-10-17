@@ -148,16 +148,25 @@ public class CarCameraController : MonoBehaviour
         bool isAiming = carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead;
 
         Vector3 basePos = new Vector3(carTarget.position.x, smoothedY, carTarget.position.z);
+
         Vector3 backwardDir = -carTarget.forward;
 
-        if (isAiming)
+        // GIỮ KHOẢNG CÁCH AN TOÀN ĐỂ KHÔNG CHUI VÀO BỤNG XE
+        float finalDistance = currentTargetDistance + (speedRatio * extraDistanceAtMaxSpeed);
+        float finalHeight = currentTargetHeight;
+
+        if (carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead)
         {
-            // CÓ SÚNG: Tự do hoàn toàn! Vector lùi của camera xoay theo hướng chuột
+            // CÓ SÚNG: Tự do ngắm bắn
             backwardDir = Quaternion.Euler(currentMouseTilt, currentMousePan, 0) * Vector3.forward;
+
+            // FIX LỖI TÀNG HÌNH: Nâng camera cao lên 1.5m và ép lùi ra sau ít nhất 3m!
+            finalHeight += 1.5f;
+            if (finalDistance < 3f) finalDistance = 3f;
         }
         else
         {
-            // KHÔNG SÚNG: Quỹ đạo Drift Swing
+            // KHÔNG SÚNG: Trở về quỹ đạo cũ
             float targetSwingAngle = 0f;
             if (smoothedSpeed > 10f)
             {
@@ -168,37 +177,24 @@ public class CarCameraController : MonoBehaviour
                 targetSwingAngle = Mathf.Clamp(slipAngle * swingMultiplier, -maxSwingAngle, maxSwingAngle);
             }
             currentSwingAngle = Mathf.Lerp(currentSwingAngle, targetSwingAngle, swingSmoothSpeed * Time.deltaTime);
-
             backwardDir = Quaternion.Euler(currentMouseTilt, currentSwingAngle + carTarget.eulerAngles.y, 0) * -Vector3.forward;
-
-            // ĐỒNG BỘ GÓC CHUỘT: Lưu lại góc nhìn hiện tại để lúc ăn súng không bị quay ngược 180 độ
             currentMousePan = currentSwingAngle + carTarget.eulerAngles.y + 180f;
         }
 
-        // ĐỊNH VỊ CAMERA
-        float finalDistance = currentTargetDistance + ((smoothedSpeed / maxSpeedKmh) * extraDistanceAtMaxSpeed);
+        // Vị trí Camera chốt hạ
         Vector3 targetCamPos = basePos + (backwardDir * finalDistance);
-        targetCamPos.y = basePos.y + currentTargetHeight;
+        targetCamPos.y = basePos.y + finalHeight;
         transform.position = targetCamPos;
 
-        // =======================================================
-        // BÍ QUYẾT GIẢI PHÓNG CAMERA NẰM Ở ĐÂY:
-        // =======================================================
-        if (isAiming)
+        // Xoay Camera
+        if (carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead)
         {
-            // Nếu có súng: Camera KHÔNG LookAt xe nữa! Camera nhìn thẳng theo hướng chuột!
             transform.rotation = Quaternion.Euler(currentMouseTilt, currentMousePan, 0);
         }
         else
         {
-            // Nếu không có súng: Mới khóa LookAt vào đít xe
             Vector3 targetLookAt = basePos + (Vector3.up * lookAtHeightOffset);
             transform.LookAt(targetLookAt);
-        }
-
-        if (mainCam != null)
-        {
-            mainCam.fieldOfView = Mathf.Lerp(minFOV, maxFOV, smoothedSpeed / maxSpeedKmh);
         }
     }
 }
