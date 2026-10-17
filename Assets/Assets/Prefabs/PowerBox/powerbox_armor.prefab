@@ -9,6 +9,18 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 4d3f96ec4eb25e6449e88fa9b6377749, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.5336406
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4d3f96ec4eb25e6449e88fa9b6377749, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.5336406
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4d3f96ec4eb25e6449e88fa9b6377749, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.5336406
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 4d3f96ec4eb25e6449e88fa9b6377749, type: 3}
       propertyPath: m_LocalPosition.x
       value: -5.672088
       objectReference: {fileID: 0}
@@ -107,6 +119,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b59aa11406aabff489439e0f61983608, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PowerUpBox
+  myType: 0
   respawnTime: 10
 --- !u!65 &3224368511750081864
 BoxCollider:

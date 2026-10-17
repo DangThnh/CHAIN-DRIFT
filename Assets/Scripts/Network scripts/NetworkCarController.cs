@@ -70,6 +70,7 @@ public class NetworkCarController : NetworkBehaviour
     private float pitchInertiaMultiplier = 0f;
     private float lastMoveInput = 0f;
 
+    //POWER UP BOC GIAP!!!
     [Header("Power-Ups: ENHANCE (Juggernaut)")]
     public GameObject armorMesh;        // Kéo cái Armor_Mesh vừa tạo vào đây
     public float armorDuration = 8f;    // Thời gian tác dụng (8 giây)
@@ -81,6 +82,28 @@ public class NetworkCarController : NetworkBehaviour
 
     private float armorTimer = 0f;
     private float originalMass;
+
+    //POWER UP SUNG!!!
+    [Header("Power-Ups: GUNS")]
+    public GameObject crosshairUI; // Kéo cục Image Crosshair ngoài Canvas vào đây
+    public GameObject gunTurretObj;     // Kéo model 3D khẩu súng vào đây
+    public Transform gunFirePoint;      // Điểm đầu nòng súng để bắn tia Hitscan ra
+    public float gunDuration = 10f;     // Súng tồn tại 10s
+    public float fireRate = 0.2f;       // Tốc độ xả đạn (0.2s/viên)
+    public float gunDamage = 15f;       // Sát thương mỗi viên
+    public LineRenderer bulletTracer;   // Kéo 1 LineRenderer vào đây để làm tia đạn
+    public float tracerDisplayTime = 0.05f; // Đạn chỉ chớp 0.05s rồi tắt
+    private float tracerTimer = 0f;
+
+    [Networked] public NetworkBool IsArmed { get; set; }
+    private float gunTimer = 0f;
+    private float nextFireTime = 0f;
+
+    // Biến để ngắm chuột
+    private Camera mainCam;
+
+
+
 
     [Header("Anti-Rollover")]
     public float flipDelay = 2.0f;     // Lật ngửa 2 giây sẽ tự cứu
@@ -152,6 +175,8 @@ public class NetworkCarController : NetworkBehaviour
             CurrentHealth = maxHealth;
             IsDead = false;
         }
+
+        mainCam = Camera.main; // Lấy camera chính để phóng tia ngắm bắn
     }
 
     public override void FixedUpdateNetwork()
@@ -185,17 +210,34 @@ public class NetworkCarController : NetworkBehaviour
             moveInput = 0; steerInput = 0; isDrifting = false;
         }
 
+        // ==========================================
+        // QUẢN LÝ THỜI GIAN POWER-UP (CHỈ HOST LÀM)
+        // ==========================================
         if (Object.HasStateAuthority)
         {
             if (IsArmored)
             {
                 armorTimer -= Runner.DeltaTime;
-                if (armorTimer <= 0)
-                {
-                    IsArmored = false;
-                    rb.mass = originalMass; // Trả lại 1000kg
-                    Debug.Log(">> SERVER: XE ĐÃ HẾT CƯỜNG HÓA! <<");
-                }
+                if (armorTimer <= 0) { IsArmored = false; rb.mass = originalMass; }
+            }
+
+            if (IsArmed)
+            {
+                gunTimer -= Runner.DeltaTime;
+                if (gunTimer <= 0) { IsArmed = false; }
+            }
+        }
+
+        // ==========================================
+        // CƠ CHẾ BẮN SÚNG HITSCAN (Chỉ người đang lái xe này mới được bắn)
+        // ==========================================
+        if (IsArmed && HasInputAuthority)
+        {
+            // Bấm chuột trái để bắn
+            if (Input.GetMouseButton(0) && Time.time >= nextFireTime)
+            {
+                nextFireTime = Time.time + fireRate;
+                FireHitscanWeapon();
             }
         }
 
@@ -297,6 +339,40 @@ public class NetworkCarController : NetworkBehaviour
                 armorMesh.SetActive(IsArmored);
             }
         }
+
+        if (gunTurretObj != null)
+        {
+            bool showGun = IsArmed && !IsDead;
+            if (gunTurretObj.activeSelf != showGun) gunTurretObj.SetActive(showGun);
+
+            // Xoay súng và Bật Crosshair (Chỉ chủ xe mới thấy)
+            if (showGun && HasInputAuthority)
+            {
+                if (crosshairUI != null && !crosshairUI.activeSelf) crosshairUI.SetActive(true);
+
+                // Ép nòng súng xoay nhìn theo Camera
+                Ray ray = mainCam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+                Vector3 lookPoint = ray.GetPoint(100f);
+                if (Physics.Raycast(ray, out RaycastHit hit, 200f, ~(1 << LayerMask.NameToLayer("Ignore Raycast"))))
+                {
+                    lookPoint = hit.point;
+                }
+                gunTurretObj.transform.LookAt(lookPoint);
+            }
+            else
+            {
+                // Tắt Crosshair khi hết súng hoặc khi xe của người khác
+                if (crosshairUI != null && crosshairUI.activeSelf) crosshairUI.SetActive(false);
+            }
+        }
+
+        // TẮT TIA ĐẠN SAU VÀI MILI GIÂY
+        if (bulletTracer != null && bulletTracer.enabled)
+        {
+            tracerTimer -= Time.deltaTime;
+            if (tracerTimer <= 0) bulletTracer.enabled = false;
+        }
+
 
         // 2. LOGIC MÀU SƠN VÀ NHẤP NHÁY ĐỎ KHI SẮP CHẾT (< 30% MÁU)
         if (carBodyRenderer != null)
@@ -541,15 +617,21 @@ public class NetworkCarController : NetworkBehaviour
 
 
     // Hàm này chạy trên Server khi xe ăn được hộp
-    public void ActivateArmor()
+    public void GivePowerUp(PowerUpBox.PowerUpType type)
     {
         if (!Object.HasStateAuthority) return;
 
-        IsArmored = true;
-        armorTimer = armorDuration;
-        rb.mass = originalMass * armoredMassMultiplier; // Bơm trọng lượng lên 5000kg!
-
-        Debug.Log(">> SERVER: XE ĐÃ ĐƯỢC CƯỜNG HÓA! TRỌNG LƯỢNG X5! <<");
+        if (type == PowerUpBox.PowerUpType.Armor)
+        {
+            IsArmored = true;
+            armorTimer = armorDuration;
+            rb.mass = originalMass * armoredMassMultiplier;
+        }
+        else if (type == PowerUpBox.PowerUpType.Gun)
+        {
+            IsArmed = true;
+            gunTimer = gunDuration;
+        }
     }
 
     void OnCollisionEnter(Collision collision)
@@ -680,5 +762,70 @@ public class NetworkCarController : NetworkBehaviour
         rb.angularVelocity = Vector3.zero;
 
         Debug.Log($"[{MyTeam}] ĐÃ HỒI SINH CÁCH XE HÀNG 100M!");
+    }
+
+    void FireHitscanWeapon()
+    {
+        // Tia ngắm phóng thẳng từ Tâm màn hình Camera ra vô tận
+        Ray ray = mainCam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        Vector3 targetPoint = ray.GetPoint(500f);
+
+        // Quét xuyên mọi thứ TRỪ cái xe của mình (Tránh tự bắn vào mui xe)
+        int mask = ~(1 << LayerMask.NameToLayer("Ignore Raycast"));
+
+        if (Physics.Raycast(ray, out RaycastHit hitInfo, 500f, mask))
+        {
+            targetPoint = hitInfo.point;
+        }
+
+        // Hướng bắn thật từ nòng súng
+        Vector3 fireDirection = (targetPoint - gunFirePoint.position).normalized;
+
+        RPC_FireGun(gunFirePoint.position, fireDirection);
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    public void RPC_FireGun(Vector3 firePos, Vector3 direction)
+    {
+        // 1. TÍNH TOÁN SÁT THƯƠNG TRÊN SERVER
+        if (Physics.Raycast(firePos, direction, out RaycastHit hit, 200f))
+        {
+            // Bắn Cargo
+            CargoManager cargo = hit.collider.GetComponentInParent<CargoManager>();
+            if (cargo != null && MyTeam == PlayerTeam.Hunter)
+            {
+                cargo.RPC_TakeDamage(gunDamage);
+            }
+
+            // Bắn Xe Đối Phương (Mọi phe đều có quyền bắn xe phe kia)
+            NetworkCarController enemyCar = hit.collider.GetComponentInParent<NetworkCarController>();
+            if (enemyCar != null && enemyCar != this)
+            {
+                if (enemyCar.MyTeam != this.MyTeam && !enemyCar.IsDead)
+                {
+                    enemyCar.RPC_TakeDamage(gunDamage);
+
+                    // (Tùy chọn: Thêm lực hất văng xe địch khi trúng đạn)
+                    Rigidbody enemyRb = enemyCar.GetComponent<Rigidbody>();
+                    if (enemyRb != null) enemyRb.AddForceAtPosition(direction * 5000f, hit.point, ForceMode.Impulse);
+                }
+            }
+        }
+
+        // 2. GỌI MỌI NGƯỜI CHƠI VẼ TIA ĐẠN BẰNG ĐỒ HỌA THẬT
+        RPC_DrawTracer(firePos, firePos + (direction * 200f));
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    public void RPC_DrawTracer(Vector3 startPoint, Vector3 endPoint)
+    {
+        // Hàm này chạy trên TẤT CẢ các máy (Host và Client)
+        if (bulletTracer != null)
+        {
+            bulletTracer.enabled = true;
+            bulletTracer.SetPosition(0, startPoint);
+            bulletTracer.SetPosition(1, endPoint);
+            tracerTimer = tracerDisplayTime; // Bật đồng hồ chớp tắt
+        }
     }
 }

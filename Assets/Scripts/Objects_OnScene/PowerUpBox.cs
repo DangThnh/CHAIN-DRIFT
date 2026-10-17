@@ -3,6 +3,9 @@ using Fusion;
 
 public class PowerUpBox : NetworkBehaviour
 {
+    public enum PowerUpType { Armor, Gun } // Thêm loại Gun
+    public PowerUpType myType = PowerUpType.Armor;
+
     public float respawnTime = 10f;
     [Networked] private NetworkBool isHidden { get; set; }
     private float hideTimer = 0f;
@@ -55,8 +58,7 @@ public class PowerUpBox : NetworkBehaviour
                 return; // Thoát hàm ngay lập tức
             }
 
-            // Đạt điều kiện: Xe tự do -> Cho ăn!
-            car.ActivateArmor();
+            car.GivePowerUp(myType);
 
             // Ẩn hộp đi
             isHidden = true;
