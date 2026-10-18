@@ -1055,7 +1055,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   acceleration: 10
-  maxSpeedKmh: 180
+  maxSpeedKmh: 100
   reverseForce: 10
   autoBrakeForce: 10
   suspensionRestDist: 0.45
@@ -1091,11 +1091,12 @@ MonoBehaviour:
   crosshairUI: {fileID: 4902179841844739271}
   gunTurretObj: {fileID: 7611702678249049980}
   gunFirePoint: {fileID: 3329362803543722483}
-  gunDuration: 10
+  gunDuration: 1000
   fireRate: 0.2
   gunDamage: 15
   bulletTracer: {fileID: 1896936901772146121}
-  tracerDisplayTime: 0.05
+  tracerDisplayTime: 0.01
+  gunModelRotationOffset: {x: 0, y: 180, z: 0}
   _NetGunLookTarget: {x: 0, y: 0, z: 0}
   _IsArmed:
     RawValue: 0
@@ -1507,7 +1508,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.7071068
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalRotation.y
@@ -1515,11 +1516,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: -90
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
@@ -1527,7 +1528,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8609202119888835772, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
+      value: 90
       objectReference: {fileID: 0}
     - target: {fileID: 8949170443130228230, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_Name
@@ -1539,7 +1540,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8949170443130228230, guid: f1d55c934ae7aab4c862f58a65ab7d21, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

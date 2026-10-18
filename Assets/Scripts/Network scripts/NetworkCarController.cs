@@ -95,6 +95,10 @@ public class NetworkCarController : NetworkBehaviour
     public float tracerDisplayTime = 0.05f; // Đạn chỉ chớp 0.05s rồi tắt
     private float tracerTimer = 0f;
 
+    [Tooltip("Góc bù trừ nếu model 3D bị ngược hướng (VD: set Y = 180)")]
+    public Vector3 gunModelRotationOffset = new Vector3(0, 180f, 0);
+
+
     // BIẾN MẠNG: Lưu vị trí mà đầu nòng súng đang nhắm tới để mọi máy cùng thấy
     [Networked] public Vector3 NetGunLookTarget { get; set; }
     [Networked] public NetworkBool IsArmed { get; set; }
@@ -345,8 +349,8 @@ public class NetworkCarController : NetworkBehaviour
                 Vector3 lookDir = NetGunLookTarget - gunTurretObj.transform.position;
                 if (lookDir != Vector3.zero)
                 {
-                    // Xoay súng nhìn thẳng vào điểm ngắm
-                    Quaternion targetRot = Quaternion.LookRotation(lookDir);
+                    // Luôn luôn nhân thêm góc gunModelRotationOffset trong mỗi frame
+                    Quaternion targetRot = Quaternion.LookRotation(lookDir) * Quaternion.Euler(gunModelRotationOffset);
                     gunTurretObj.transform.rotation = Quaternion.Slerp(gunTurretObj.transform.rotation, targetRot, 20f * Time.deltaTime);
                 }
             }
@@ -859,5 +863,32 @@ public class NetworkCarController : NetworkBehaviour
             bulletTracer.SetPosition(1, endPoint);
             tracerTimer = tracerDisplayTime; // Bật đồng hồ chớp tắt
         }
+    }
+
+    // ========================================================
+    // BỘ CÂN CHỈNH GÓC MODEL SÚNG TRỰC TIẾP TRÊN MÀN HÌNH
+    // ========================================================
+    void OnGUI()
+    {
+        // Chỉ hiện bảng khi xe mình đang có súng và đang cầm lái
+        if (!IsArmed || !HasInputAuthority) return;
+
+        // Vẽ một bảng nhỏ ở góc trên bên phải màn hình
+        GUILayout.BeginArea(new Rect(Screen.width - 260, 20, 240, 200), GUI.skin.box);
+        GUILayout.Label("<b>CHỈNH GÓC MODEL SÚNG (LIVE)</b>");
+
+        GUILayout.Label($"Trục X (Ngẩng/Cúi): {(int)gunModelRotationOffset.x}°");
+        gunModelRotationOffset.x = GUILayout.HorizontalSlider(gunModelRotationOffset.x, -180f, 180f);
+
+        GUILayout.Label($"Trục Y (Xoay Trái/Phải): {(int)gunModelRotationOffset.y}°");
+        gunModelRotationOffset.y = GUILayout.HorizontalSlider(gunModelRotationOffset.y, -180f, 180f);
+
+        GUILayout.Label($"Trục Z (Nghiêng): {(int)gunModelRotationOffset.z}°");
+        gunModelRotationOffset.z = GUILayout.HorizontalSlider(gunModelRotationOffset.z, -180f, 180f);
+
+        if (GUILayout.Button("Reset về 0")) gunModelRotationOffset = Vector3.zero;
+        if (GUILayout.Button("Đảo ngược 180 độ")) gunModelRotationOffset = new Vector3(0, 180f, 0);
+
+        GUILayout.EndArea();
     }
 }
