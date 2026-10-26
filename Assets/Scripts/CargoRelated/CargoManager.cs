@@ -52,13 +52,13 @@ public class CargoManager : NetworkBehaviour
         if (cargoMesh != null && normalMat != null && damagedMat != null)
         {
             float healthPercent = CurrentHealth / maxHealth;
-            if (healthPercent <= 0.3f && cargoMesh.material != damagedMat)
+            if (healthPercent <= 0.3f && cargoMesh.sharedMaterial != damagedMat)
             {
-                cargoMesh.material = damagedMat;
+                cargoMesh.sharedMaterial = damagedMat;
             }
-            else if (healthPercent > 0.3f && cargoMesh.material != normalMat)
+            else if (healthPercent > 0.3f && cargoMesh.sharedMaterial != normalMat)
             {
-                cargoMesh.material = normalMat;
+                cargoMesh.sharedMaterial = normalMat;
             }
         }
     }

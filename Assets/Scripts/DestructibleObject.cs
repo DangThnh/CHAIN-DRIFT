@@ -25,14 +25,15 @@ public class DestructibleObject : MonoBehaviour
         {
             canBreakIt = true;
         }
-        // ĐIỀU KIỆN 2: Là xe của người chơi đang Bọc Thép
+        // ĐIỀU KIỆN 2: Là xe của người chơi đang Bọc Thép hoặc đang Khoan
         else
         {
             NetworkCarController car = other.GetComponentInParent<NetworkCarController>();
-            if (car != null && car.IsArmored)
+            if (car != null && (car.IsArmored || car.IsDrilling))
             {
                 canBreakIt = true;
             }
+            
         }
 
         if (canBreakIt)

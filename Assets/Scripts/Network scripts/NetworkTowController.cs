@@ -99,11 +99,13 @@ public class NetworkTowController : NetworkBehaviour
                     activeJoint.damper = springDamper;
                     activeJoint.enableCollision = true;
 
+                    if (myCar != null) myCar.IsTowingCargo = true;
+
                     Debug.Log(">> SERVER: ĐÃ KẾT NỐI DÂY XÍCH THÀNH CÔNG! <<");
                     break;
 
                 }
-                GetComponent<NetworkCarController>().IsTowingCargo = true;
+                //GetComponent<NetworkCarController>().IsTowingCargo = true;
             }
         }
     }

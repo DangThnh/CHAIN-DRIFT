@@ -1,5 +1,6 @@
 using UnityEngine;
 using Fusion;
+using System.Collections.Generic;
 
 public class NetworkCarController : NetworkBehaviour
 {
@@ -70,6 +71,13 @@ public class NetworkCarController : NetworkBehaviour
     private float pitchInertiaMultiplier = 0f;
     private float lastMoveInput = 0f;
 
+    // --- Bước 0: trạng thái sống/chết & material nhấp nháy ---
+    private Collider bodyCollider;
+    private RigidbodyConstraints originalConstraints;
+    private bool aliveStateApplied = true;
+    private Material blinkMat;      // 1 instance duy nhất, tạo lười khi cần
+    private Material blinkSource;
+
     //POWER UP BOC GIAP!!!
     [Header("Power-Ups: ENHANCE (Juggernaut)")]
     public GameObject armorMesh;        // Kéo cái Armor_Mesh vừa tạo vào đây
@@ -97,6 +105,23 @@ public class NetworkCarController : NetworkBehaviour
 
     [Tooltip("Góc bù trừ nếu model 3D bị ngược hướng (VD: set Y = 180)")]
     public Vector3 gunModelRotationOffset = new Vector3(0, 180f, 0);
+
+    //POWER UP KHOAN!!!
+    [Header("Power-Ups: DRILL")]
+    public GameObject drillMesh;                       // Mesh mũi khoan (KHÔNG có Collider), để tắt sẵn
+    public float drillDuration = 10f;
+    public float drillDps = 35f;                       // Sát thương mỗi giây khi chạm
+    public float drillTickInterval = 0.2f;             // Chu kỳ quét va chạm (server)
+    public float drillRadius = 1.0f;                   // Bán kính vùng chạm ở đầu xe
+    public Vector3 drillTipLocalOffset = new Vector3(0f, 0.5f, 2.2f); // Theo toạ độ local của root xe
+    public float drillSpinSpeed = 720f;                // Độ/giây, chỉ là hiệu ứng
+
+    [Networked] public NetworkBool IsDrilling { get; set; }
+    [Networked] private TickTimer DrillTimer { get; set; }
+
+    private float drillTickAccum = 0f;
+    private readonly Collider[] drillHits = new Collider[16];
+    private readonly HashSet<Component> drillAlreadyHit = new HashSet<Component>();
 
 
     // BIẾN MẠNG: Lưu vị trí mà đầu nòng súng đang nhắm tới để mọi máy cùng thấy
@@ -144,6 +169,9 @@ public class NetworkCarController : NetworkBehaviour
         rb = GetComponent<Rigidbody>();
         originalMass = rb.mass; // LƯU LẠI KHỐI LƯỢNG GỐC
 
+        bodyCollider = GetComponent<Collider>();
+        originalConstraints = rb.constraints;
+
         rb.centerOfMass = new Vector3(0, -0.5f, 0);
 
         if (HasInputAuthority)
@@ -187,6 +215,7 @@ public class NetworkCarController : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
+        ApplyAliveState(!IsDead);
 
         // === NẾU XE CHẾT: TẮT NÚT BẤM, ĐẾM NGƯỢC HỒI SINH ===
         if (IsDead)
@@ -231,6 +260,12 @@ public class NetworkCarController : NetworkBehaviour
             {
                 gunTimer -= Runner.DeltaTime;
                 if (gunTimer <= 0) { IsArmed = false; }
+            }
+
+            if (IsDrilling)
+            {
+                if (DrillTimer.Expired(Runner)) { IsDrilling = false; DrillTimer = default; }
+                else ServerDrillTick();
             }
         }
 
@@ -317,6 +352,8 @@ public class NetworkCarController : NetworkBehaviour
 
     public override void Render()
     {
+        ApplyAliveState(!IsDead);
+
         // NetworkRigidbody tự động lo việc làm mượt vị trí xe thông qua cục Interpolation Target.
 
         // 1. NẾU CHẾT: GIẤU HOÀN TOÀN CỤC VISUALS
@@ -328,7 +365,11 @@ public class NetworkCarController : NetworkBehaviour
         }
 
         // Nếu xe chết thì bỏ qua vẽ bánh xe và vệt lốp
-        if (IsDead) return;
+        if (IsDead)
+        {
+            if (crosshairUI != null) crosshairUI.SetActive(false);
+            return;
+        }
 
         if (armorMesh != null)
         {
@@ -336,6 +377,12 @@ public class NetworkCarController : NetworkBehaviour
             {
                 armorMesh.SetActive(IsArmored);
             }
+        }
+
+        if (drillMesh != null)
+        {
+            if (drillMesh.activeSelf != IsDrilling) drillMesh.SetActive(IsDrilling);
+            if (IsDrilling) drillMesh.transform.Rotate(0f, drillSpinSpeed * Time.deltaTime, 0f, Space.Self);
         }
 
         if (gunTurretObj != null)
@@ -374,17 +421,22 @@ public class NetworkCarController : NetworkBehaviour
             else if (MyTeam == PlayerTeam.Defender) targetMat = defenderMaterial;
             else if (MyTeam == PlayerTeam.Hunter) targetMat = hunterMaterial;
 
-            // Hiệu ứng nhấp nháy đỏ khẩn cấp (Dùng hàm Lerp màu)
-            if (CurrentHealth > 0 && CurrentHealth <= (maxHealth * 0.3f))
+            bool lowHealth = CurrentHealth > 0 && CurrentHealth <= (maxHealth * 0.3f);
+            if (lowHealth && targetMat != null)
             {
-                // Chớp tắt liên tục giữa màu gốc và Màu Đỏ
+                if (blinkMat == null) blinkMat = new Material(targetMat);
+                if (blinkSource != targetMat)
+                {
+                    blinkMat.CopyPropertiesFromMaterial(targetMat);
+                    blinkSource = targetMat;
+                }
                 float blink = Mathf.PingPong(Time.time * 5f, 1f);
-                carBodyRenderer.material.color = Color.Lerp(targetMat.color, Color.red, blink);
+                blinkMat.color = Color.Lerp(targetMat.color, Color.red, blink);
+                if (carBodyRenderer.sharedMaterial != blinkMat) carBodyRenderer.sharedMaterial = blinkMat;
             }
-            else
+            else if (targetMat != null && carBodyRenderer.sharedMaterial != targetMat)
             {
-                // Khôi phục material gốc nếu máu an toàn
-                if (carBodyRenderer.material != targetMat) carBodyRenderer.material = targetMat;
+                carBodyRenderer.sharedMaterial = targetMat;
             }
         }
 
@@ -612,6 +664,7 @@ public class NetworkCarController : NetworkBehaviour
     public void GivePowerUp(PowerUpBox.PowerUpType type)
     {
         if (!Object.HasStateAuthority) return;
+        ClearAllPowerUps();
 
         if (type == PowerUpBox.PowerUpType.Armor)
         {
@@ -623,6 +676,12 @@ public class NetworkCarController : NetworkBehaviour
         {
             IsArmed = true;
             gunTimer = gunDuration;
+        }
+        else if (type == PowerUpBox.PowerUpType.Drill)
+        {
+            IsDrilling = true;
+            DrillTimer = TickTimer.CreateFromSeconds(Runner, drillDuration);
+            drillTickAccum = 0f;
         }
     }
 
@@ -721,6 +780,9 @@ public class NetworkCarController : NetworkBehaviour
         IsDead = true;
         respawnTimer = respawnDelay;
 
+        ClearAllPowerUps();
+        ApplyAliveState(false);
+
         // NẾU ĐANG KÉO HÀNG MÀ CHẾT -> ÉP ĐỨT DÂY XÍCH NGAY LẬP TỨC!
         NetworkTowController tow = GetComponent<NetworkTowController>();
         if (tow != null) tow.RPC_ForceDetach(); // (Lát nữa ta sẽ viết hàm này bên TowController)
@@ -732,6 +794,7 @@ public class NetworkCarController : NetworkBehaviour
     {
         IsDead = false;
         CurrentHealth = maxHealth;
+        ApplyAliveState(true);
 
         // TÌM XE HÀNG ĐỂ TÍNH TOÁN VỊ TRÍ HỒI SINH
         CargoManager cargo = FindObjectOfType<CargoManager>();
@@ -797,6 +860,8 @@ public class NetworkCarController : NetworkBehaviour
 
     void FireHitscanWeapon(Vector3 targetPoint)
     {
+        Debug.Log("[TRACER] 1. Máy bắn gọi RPC_FireGun | Host? " + Runner.IsServer);
+
         Vector3 fireDirection = (targetPoint - gunFirePoint.position).normalized;
         RPC_FireGun(gunFirePoint.position, fireDirection);
     }
@@ -804,6 +869,8 @@ public class NetworkCarController : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     public void RPC_FireGun(Vector3 firePos, Vector3 direction)
     {
+        Debug.Log("[TRACER] 2. Host nhận RPC_FireGun");
+
         // BÍ QUYẾT BẮT TRÚNG: Đẩy điểm bắt đầu của tia ra phía trước 2 mét
         // để đạn không bao giờ va chạm vào chính chiếc xe của mình!
         Vector3 rayStart = firePos + (direction * 2.0f);
@@ -855,6 +922,12 @@ public class NetworkCarController : NetworkBehaviour
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     public void RPC_DrawTracer(Vector3 startPoint, Vector3 endPoint)
     {
+        Debug.Log($"[TRACER] 4. enabled={bulletTracer.enabled} | width={bulletTracer.widthMultiplier} | count={bulletTracer.positionCount} | start={startPoint} | end={endPoint} | cam={(Camera.main != null ? Camera.main.transform.position.ToString() : "NULL")}");
+
+        Debug.Log($"[TRACER] 3. Nhận DrawTracer trên {(Runner.IsServer ? "HOST" : "CLIENT")} | " +
+          $"lr={(bulletTracer != null)} | worldSpace={(bulletTracer != null && bulletTracer.useWorldSpace)} | " +
+          $"shader={(bulletTracer != null && bulletTracer.sharedMaterial != null ? bulletTracer.sharedMaterial.shader.name : "NULL")}");
+
         // Hàm này chạy trên TẤT CẢ các máy (Host và Client)
         if (bulletTracer != null)
         {
@@ -865,30 +938,68 @@ public class NetworkCarController : NetworkBehaviour
         }
     }
 
-    // ========================================================
-    // BỘ CÂN CHỈNH GÓC MODEL SÚNG TRỰC TIẾP TRÊN MÀN HÌNH
-    // ========================================================
-    void OnGUI()
+    // CƠ CHẾ KHOAN
+    // CHỈ chạy trên StateAuthority (gọi từ FixedUpdateNetwork)
+    void ServerDrillTick()
     {
-        // Chỉ hiện bảng khi xe mình đang có súng và đang cầm lái
-        if (!IsArmed || !HasInputAuthority) return;
+        drillTickAccum += Runner.DeltaTime;
+        if (drillTickAccum < drillTickInterval) return;
 
-        // Vẽ một bảng nhỏ ở góc trên bên phải màn hình
-        GUILayout.BeginArea(new Rect(Screen.width - 260, 20, 240, 200), GUI.skin.box);
-        GUILayout.Label("<b>CHỈNH GÓC MODEL SÚNG (LIVE)</b>");
+        float dmg = drillDps * drillTickAccum;
+        drillTickAccum = 0f;
 
-        GUILayout.Label($"Trục X (Ngẩng/Cúi): {(int)gunModelRotationOffset.x}°");
-        gunModelRotationOffset.x = GUILayout.HorizontalSlider(gunModelRotationOffset.x, -180f, 180f);
+        Vector3 tip = transform.TransformPoint(drillTipLocalOffset);
+        int n = Physics.OverlapSphereNonAlloc(tip, drillRadius, drillHits, ~0, QueryTriggerInteraction.Ignore);
 
-        GUILayout.Label($"Trục Y (Xoay Trái/Phải): {(int)gunModelRotationOffset.y}°");
-        gunModelRotationOffset.y = GUILayout.HorizontalSlider(gunModelRotationOffset.y, -180f, 180f);
+        drillAlreadyHit.Clear();
+        for (int i = 0; i < n; i++)
+        {
+            Collider c = drillHits[i];
 
-        GUILayout.Label($"Trục Z (Nghiêng): {(int)gunModelRotationOffset.z}°");
-        gunModelRotationOffset.z = GUILayout.HorizontalSlider(gunModelRotationOffset.z, -180f, 180f);
+            NetworkCarController car = c.GetComponentInParent<NetworkCarController>();
+            if (car != null)
+            {
+                if (car == this || car.IsDead || car.IsArmored || car.MyTeam == MyTeam) continue;
+                if (drillAlreadyHit.Add(car)) car.RPC_TakeDamage(dmg);
+                continue;
+            }
 
-        if (GUILayout.Button("Reset về 0")) gunModelRotationOffset = Vector3.zero;
-        if (GUILayout.Button("Đảo ngược 180 độ")) gunModelRotationOffset = new Vector3(0, 180f, 0);
+            CargoManager cargo = c.GetComponentInParent<CargoManager>();
+            if (cargo != null && MyTeam == PlayerTeam.Hunter && drillAlreadyHit.Add(cargo))
+            {
+                cargo.RPC_TakeDamage(dmg);
+            }
+        }
+    }
 
-        GUILayout.EndArea();
+    // Vẽ vùng chạm khi chọn xe trong Scene/Game view lúc chạy, để chỉnh drillTipLocalOffset
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.TransformPoint(drillTipLocalOffset), drillRadius);
+    }
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        if (blinkMat != null) Destroy(blinkMat);
+    }
+
+    // Xe chết: tắt collider + đóng băng để không rơi xuyên đất. Gọi lặp lại vô hại.
+    void ApplyAliveState(bool alive)
+    {
+        if (aliveStateApplied == alive || rb == null) return;
+        aliveStateApplied = alive;
+        if (bodyCollider != null) bodyCollider.enabled = alive;
+        rb.constraints = alive ? originalConstraints : RigidbodyConstraints.FreezeAll;
+    }
+
+    // CHỈ gọi trên StateAuthority. Mỗi xe chỉ giữ 1 power-up.
+    void ClearAllPowerUps()
+    {
+        if (IsArmored) { IsArmored = false; rb.mass = originalMass; }
+        IsArmed = false;
+        IsDrilling = false;
+        DrillTimer = default;
+        drillTickAccum = 0f;
+        // Mốc A (Drill) và Mốc B (Missile) sẽ thêm dòng vào đây.
     }
 }

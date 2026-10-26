@@ -3,7 +3,7 @@ using Fusion;
 
 public class PowerUpBox : NetworkBehaviour
 {
-    public enum PowerUpType { Armor, Gun } // Thêm loại Gun
+    public enum PowerUpType { Armor, Gun, Drill } // Thêm loại Gun
     public PowerUpType myType = PowerUpType.Armor;
 
     public float respawnTime = 10f;
@@ -45,7 +45,7 @@ public class PowerUpBox : NetworkBehaviour
 
         NetworkCarController car = other.GetComponentInParent<NetworkCarController>();
 
-        if (car != null)
+        if (car != null && !car.IsDead)
         {
             // TÌM SCRIPT KÉO HÀNG CỦA CHIẾC XE NÀY
             NetworkTowController towCtrl = car.GetComponent<NetworkTowController>();
