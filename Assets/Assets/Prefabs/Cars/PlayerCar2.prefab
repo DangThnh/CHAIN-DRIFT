@@ -1189,7 +1189,7 @@ MonoBehaviour:
   tracerDisplayTime: 0.02
   gunModelRotationOffset: {x: -90, y: 0, z: 0}
   drillMesh: {fileID: 4833275406792796903}
-  drillDuration: 100
+  drillDuration: 10
   drillDps: 100
   drillTickInterval: 0.2
   drillRadius: 0.3

@@ -75,11 +75,22 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
         {
             Debug.Log($"Người chơi {player} đã vào phòng! Đang tạo nhân vật...");
 
-            float xOffset = (player.RawEncoded % 4) * 4f;
-            Vector3 spawnPosition = new Vector3(xOffset, 1, 0);
+            Vector3 spawnPosition;
+            Quaternion spawnRotation = Quaternion.identity;
+            if (playerSpawnPoints != null && playerSpawnPoints.Length > 0)
+            {
+                Transform sp = playerSpawnPoints[player.RawEncoded % playerSpawnPoints.Length];
+                spawnPosition = sp.position;
+                spawnRotation = sp.rotation;
+            }
+            else
+            {
+                float xOffset = (player.RawEncoded % 4) * 4f;
+                spawnPosition = new Vector3(xOffset, 1, 0);
+            }
 
             // 1. Sinh xe và lưu vào biến carObj
-            NetworkObject carObj = runner.Spawn(playerPrefab, spawnPosition, Quaternion.identity, player);
+            NetworkObject carObj = runner.Spawn(playerPrefab, spawnPosition, spawnRotation, player);
 
             // ========================================================
             // 2. LOGIC CHIA PHE (CHỈ SERVER MỚI ĐƯỢC QUYẾT ĐỊNH)
