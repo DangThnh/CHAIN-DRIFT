@@ -162,6 +162,9 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
         // THÊM DÒNG NÀY: Bắt phím F để bắn/tháo xích
         data.isTowPressed = Input.GetKey(KeyCode.F);
 
+        // THÊM DÒNG NÀY: Bắt phím E để bắn tên lửa
+        data.isFirePressed = Input.GetKey(KeyCode.E);
+
         // Đóng gói và đẩy dữ liệu vào đường truyền mạng của Fusion
         input.Set(data);
     }

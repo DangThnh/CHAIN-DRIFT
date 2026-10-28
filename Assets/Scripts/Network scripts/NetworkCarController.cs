@@ -123,6 +123,18 @@ public class NetworkCarController : NetworkBehaviour
     private readonly Collider[] drillHits = new Collider[16];
     private readonly HashSet<Component> drillAlreadyHit = new HashSet<Component>();
 
+    //POWER UP TÊN LỬA!!!
+    [Header("Power-Ups: MISSILE")]
+    public NetworkPrefabRef missilePrefab;
+    public GameObject missileLauncherMesh;   // tùy chọn, KHÔNG có Collider, tắt sẵn
+    public GameObject missileReticle;        // đĩa phẳng, KHÔNG có Collider, tắt sẵn
+    public float missileTargetAhead = 50f;   // hồng tâm cách xe bao nhiêu mét dọc đường
+    public Vector3 missileLaunchLocalOffset = new Vector3(0f, 1.8f, 0f);
+
+    [Networked] public NetworkBool HasMissile { get; set; }
+    private bool fireInput, lastFireInput;
+    private int trackHint;
+
 
     // BIẾN MẠNG: Lưu vị trí mà đầu nòng súng đang nhắm tới để mọi máy cùng thấy
     [Networked] public Vector3 NetGunLookTarget { get; set; }
@@ -140,6 +152,12 @@ public class NetworkCarController : NetworkBehaviour
     public float flipDelay = 2.0f;     // Lật ngửa 2 giây sẽ tự cứu
     public float flipForce = 15f;      // Lực búng xe lên không trung để lật lại
     private float rolloverTimer = 0f;
+
+    [Header("Wall Repel (chống kẹt tường)")]
+    public LayerMask wallLayer;            // Chọn layer TrackWall
+    public float wallProbeLength = 2.2f;   // Tính từ giữa xe. Nên lớn hơn nửa bề ngang xe khoảng 0.7-1m
+    public float wallRepelAccel = 25f;     // Gia tốc đẩy tối đa (m/s²), chỉnh theo cảm giác
+    public float wallProbeHeight = 0.4f;   // Độ cao tia so với gốc xe
 
     public enum PlayerTeam { Defender, Hunter }
 
@@ -239,10 +257,11 @@ public class NetworkCarController : NetworkBehaviour
             moveInput = data.moveInput;
             steerInput = data.steerInput;
             isDrifting = data.isDrifting;
+            fireInput = data.isFirePressed;
         }
         else
         {
-            moveInput = 0; steerInput = 0; isDrifting = false;
+            moveInput = 0; steerInput = 0; isDrifting = false; fireInput = false;
         }
 
         // ==========================================
@@ -267,6 +286,9 @@ public class NetworkCarController : NetworkBehaviour
                 if (DrillTimer.Expired(Runner)) { IsDrilling = false; DrillTimer = default; }
                 else ServerDrillTick();
             }
+
+            if (HasMissile && fireInput && !lastFireInput) ServerFireMissile();
+            lastFireInput = fireInput;
         }
 
         // ==========================================
@@ -308,6 +330,7 @@ public class NetworkCarController : NetworkBehaviour
             HandleMovement();
             HandleSteering();
             HandleTraction();
+            HandleWallRepel();
         }
 
         // ========================================================
@@ -350,6 +373,29 @@ public class NetworkCarController : NetworkBehaviour
         }
     }
 
+    //Hệ thống đẩy tường chống kẹt
+    void HandleWallRepel()
+    {
+        if (wallLayer.value == 0) return;
+        Vector3 origin = transform.position + transform.up * wallProbeHeight;
+        ApplyWallProbe(origin, transform.right);
+        ApplyWallProbe(origin, -transform.right);
+    }
+
+    void ApplyWallProbe(Vector3 origin, Vector3 dir)
+    {
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, wallProbeLength, wallLayer, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 push = hit.normal;
+            push.y = 0f;
+            if (push.sqrMagnitude < 1e-6f) return;
+            push.Normalize();
+            float t = 1f - hit.distance / wallProbeLength;   // càng gần tường càng mạnh
+            rb.AddForce(push * (wallRepelAccel * t), ForceMode.Acceleration);
+        }
+    }
+
+    //Hàm vẽ
     public override void Render()
     {
         ApplyAliveState(!IsDead);
@@ -362,6 +408,21 @@ public class NetworkCarController : NetworkBehaviour
             // Lấy cục Gốc của Visuals (Chứa cả vỏ lẫn bánh xe)
             GameObject visualsRoot = chassisMesh.parent.gameObject;
             visualsRoot.SetActive(!IsDead);
+        }
+
+        // tên lửa
+        if (missileLauncherMesh != null && missileLauncherMesh.activeSelf != HasMissile)
+            missileLauncherMesh.SetActive(HasMissile);
+
+        if (missileReticle != null)
+        {
+            bool show = HasMissile && HasInputAuthority && !IsDead;
+            if (missileReticle.activeSelf != show) missileReticle.SetActive(show);
+            if (show && TryGetMissileTarget(out Vector3 tgt))
+            {
+                missileReticle.transform.position = tgt + Vector3.up * 0.1f;
+                missileReticle.transform.rotation = Quaternion.identity;
+            }
         }
 
         // Nếu xe chết thì bỏ qua vẽ bánh xe và vệt lốp
@@ -683,6 +744,10 @@ public class NetworkCarController : NetworkBehaviour
             DrillTimer = TickTimer.CreateFromSeconds(Runner, drillDuration);
             drillTickAccum = 0f;
         }
+        else if (type == PowerUpBox.PowerUpType.Missile)
+        {
+            HasMissile = true;
+        }
     }
 
     void OnCollisionEnter(Collision collision)
@@ -972,6 +1037,39 @@ public class NetworkCarController : NetworkBehaviour
         }
     }
 
+    //Các hàm bắn tên lửa
+    bool TryGetMissileTarget(out Vector3 target)
+    {
+        target = default;
+        TrackPath tp = TrackPath.Instance;
+        if (tp == null || tp.Length <= 0f) return false;
+        float d = tp.ProjectDistance(transform.position, ref trackHint);
+        target = tp.GetPoint(d + missileTargetAhead);
+        return true;
+    }
+
+    // CHỈ chạy trên StateAuthority
+    void ServerFireMissile()
+    {
+        if (!TryGetMissileTarget(out Vector3 target))
+        {
+            Debug.LogWarning("[MISSILE] Không có TrackPath trong scene, chưa bắn được.");
+            return;
+        }
+        Vector3 start = transform.TransformPoint(missileLaunchLocalOffset);
+        Vector3 dir = target - start;
+        Quaternion rot = dir.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(dir) : transform.rotation;
+
+        HasMissile = false;
+        PlayerTeam team = MyTeam;
+        int tick = Runner.Tick.Raw;
+        float dt = Runner.DeltaTime;
+        Runner.Spawn(missilePrefab, start, rot, null, (runner, obj) =>
+        {
+            obj.GetComponent<NetworkMissile>().Init(start, target, team, tick, dt);
+        });
+    }
+
     // Vẽ vùng chạm khi chọn xe trong Scene/Game view lúc chạy, để chỉnh drillTipLocalOffset
     void OnDrawGizmosSelected()
     {
@@ -996,10 +1094,14 @@ public class NetworkCarController : NetworkBehaviour
     void ClearAllPowerUps()
     {
         if (IsArmored) { IsArmored = false; rb.mass = originalMass; }
+
         IsArmed = false;
         IsDrilling = false;
         DrillTimer = default;
         drillTickAccum = 0f;
+        HasMissile = false;
         // Mốc A (Drill) và Mốc B (Missile) sẽ thêm dòng vào đây.
+
+
     }
 }

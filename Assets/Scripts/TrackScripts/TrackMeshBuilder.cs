@@ -17,9 +17,11 @@ public class TrackMeshBuilder : MonoBehaviour
     public float wallHeight = 2f;
     public float wallThickness = 0.8f;
     public Material wallMaterial;
+    public PhysicsMaterial wallPhysicsMaterial; // Vật liệu vật lý cho collider tường
 
     [Header("Layer")]
     public string drivableLayerName = "Drivable";
+    public string wallLayerName = "TrackWall";
 
     class MeshData
     {
@@ -100,11 +102,21 @@ public class TrackMeshBuilder : MonoBehaviour
         }
 
         CreateChild("Road", road, roadMaterial, drivable);
-        if (buildWalls) CreateChild("Walls", walls, wallMaterial, 0); // Tường ở layer Default, KHÔNG phải Drivable
+
+        int wallLayerIdx = LayerMask.NameToLayer(wallLayerName);
+        if (wallLayerIdx < 0) wallLayerIdx = 0;   // chưa tạo layer thì dùng Default
+        if (buildWalls) CreateChild("Walls", walls, wallMaterial, wallLayerIdx);
+
+        if (buildWalls && wallPhysicsMaterial != null)
+        {
+            Transform w = transform.Find("Walls");
+            if (w != null) w.GetComponent<MeshCollider>().sharedMaterial = wallPhysicsMaterial;
+        }
+
         Debug.Log("[TrackMeshBuilder] Đã dựng đường: " + n + " mặt cắt.");
     }
 
-    List<Vector3> SamplePath()
+    public List<Vector3> SamplePath()
     {
         int n = waypointsParent.childCount;
         Vector3[] p = new Vector3[n];

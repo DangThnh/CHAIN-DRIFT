@@ -3,7 +3,7 @@ using Fusion;
 
 public class PowerUpBox : NetworkBehaviour
 {
-    public enum PowerUpType { Armor, Gun, Drill } // Thêm loại Gun
+    public enum PowerUpType { Armor, Gun, Drill, Missile } // Thêm loại Gun
     public PowerUpType myType = PowerUpType.Armor;
 
     public float respawnTime = 10f;

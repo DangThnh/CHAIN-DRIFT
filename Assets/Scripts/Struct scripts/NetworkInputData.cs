@@ -7,4 +7,5 @@ public struct NetworkInputData : INetworkInput
     public float steerInput;      // Trái/Phải (-1 đến 1)
     public NetworkBool isDrifting;// Phanh tay (Space) - Dùng NetworkBool thay cho bool thường
     public NetworkBool isTowPressed; // <-- THÊM DÒNG NÀY ĐỂ BẮT PHÍM F
+    public NetworkBool isFirePressed; // phím E: bắn Missile
 }
