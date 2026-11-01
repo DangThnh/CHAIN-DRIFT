@@ -200,15 +200,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 700fcd83c2ad26846b5bcc2c85e73d0f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkMissile
-  speed: 40
-  minFlightTime: 0.6
+  speed: 100
+  minFlightTime: 0.2
   arcHeightRatio: 0.3
   maxArcHeight: 25
   impactMask:
     serializedVersion: 2
     m_Bits: 72
-  explosionRadius: 9
-  carDamage: 60
+  explosionRadius: 15
+  carDamage: 100
   cargoDamage: 150
   edgeDamageRatio: 0.4
   pushVelocity: 10

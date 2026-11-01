@@ -1,6 +1,7 @@
 using UnityEngine;
 using Fusion;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class NetworkCarController : NetworkBehaviour
 {
@@ -128,7 +129,17 @@ public class NetworkCarController : NetworkBehaviour
     public NetworkPrefabRef missilePrefab;
     public GameObject missileLauncherMesh;   // tùy chọn, KHÔNG có Collider, tắt sẵn
     public GameObject missileReticle;        // đĩa phẳng, KHÔNG có Collider, tắt sẵn
-    public float missileTargetAhead = 50f;   // hồng tâm cách xe bao nhiêu mét dọc đường
+    public float missileMinDistance = 25f;    // khoảng cách khi lực nhẹ nhất
+    public float missileMaxDistance = 90f;    // khoảng cách khi lực mạnh nhất
+    public float missileGaugePeriod = 1.6f;   // giây cho một vòng lên rồi xuống
+    public GameObject missileGaugeUI;         // gốc của thanh lực, tắt sẵn
+    public Image missileGaugeFill;            // Image kiểu Filled (dọc) để hiện mức lực
+
+    public static byte LocalMissilePower;     // giá trị lực của người chơi trên máy này
+    private float missilePowerInput;          // lực nhận từ input (server dùng)
+    private bool missileGaugeWasActive;
+    private float missileGaugeStartTime;
+
     public Vector3 missileLaunchLocalOffset = new Vector3(0f, 1.8f, 0f);
 
     [Networked] public NetworkBool HasMissile { get; set; }
@@ -258,10 +269,12 @@ public class NetworkCarController : NetworkBehaviour
             steerInput = data.steerInput;
             isDrifting = data.isDrifting;
             fireInput = data.isFirePressed;
+            missilePowerInput = data.missilePower / 255f;
         }
         else
         {
             moveInput = 0; steerInput = 0; isDrifting = false; fireInput = false;
+            missilePowerInput = 0f;
         }
 
         // ==========================================
@@ -414,11 +427,37 @@ public class NetworkCarController : NetworkBehaviour
         if (missileLauncherMesh != null && missileLauncherMesh.activeSelf != HasMissile)
             missileLauncherMesh.SetActive(HasMissile);
 
+        //thanh lực tên lửa để căn lực bắn
+        bool localHolding = HasMissile && HasInputAuthority && !IsDead;
+        float gaugePower = 0f;
+
+        if (localHolding)
+        {
+            if (!missileGaugeWasActive)
+            {
+                missileGaugeWasActive = true;
+                missileGaugeStartTime = Time.time;
+            }
+            float period = Mathf.Max(0.2f, missileGaugePeriod);
+            gaugePower = Mathf.PingPong((Time.time - missileGaugeStartTime) * 2f / period, 1f);
+            LocalMissilePower = (byte)Mathf.RoundToInt(gaugePower * 255f);
+        }
+        else
+        {
+            missileGaugeWasActive = false;
+            if (HasInputAuthority) LocalMissilePower = 0;
+        }
+
+        if (missileGaugeUI != null && missileGaugeUI.activeSelf != localHolding)
+            missileGaugeUI.SetActive(localHolding);
+        if (localHolding && missileGaugeFill != null)
+            missileGaugeFill.fillAmount = gaugePower;
+
+        //hồng tâm
         if (missileReticle != null)
         {
-            bool show = HasMissile && HasInputAuthority && !IsDead;
-            if (missileReticle.activeSelf != show) missileReticle.SetActive(show);
-            if (show && TryGetMissileTarget(out Vector3 tgt))
+            if (missileReticle.activeSelf != localHolding) missileReticle.SetActive(localHolding);
+            if (localHolding && TryGetMissileTarget(gaugePower, out Vector3 tgt))
             {
                 missileReticle.transform.position = tgt + Vector3.up * 0.1f;
                 missileReticle.transform.rotation = Quaternion.identity;
@@ -1038,20 +1077,21 @@ public class NetworkCarController : NetworkBehaviour
     }
 
     //Các hàm bắn tên lửa
-    bool TryGetMissileTarget(out Vector3 target)
+    bool TryGetMissileTarget(float power01, out Vector3 target)
     {
         target = default;
         TrackPath tp = TrackPath.Instance;
         if (tp == null || tp.Length <= 0f) return false;
         float d = tp.ProjectDistance(transform.position, ref trackHint);
-        target = tp.GetPoint(d + missileTargetAhead);
+        float ahead = Mathf.Lerp(missileMinDistance, missileMaxDistance, Mathf.Clamp01(power01));
+        target = tp.GetPoint(d + ahead);
         return true;
     }
 
     // CHỈ chạy trên StateAuthority
     void ServerFireMissile()
     {
-        if (!TryGetMissileTarget(out Vector3 target))
+        if (!TryGetMissileTarget(missilePowerInput, out Vector3 target))
         {
             Debug.LogWarning("[MISSILE] Không có TrackPath trong scene, chưa bắn được.");
             return;
@@ -1079,6 +1119,7 @@ public class NetworkCarController : NetworkBehaviour
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
         if (blinkMat != null) Destroy(blinkMat);
+        if (HasInputAuthority) LocalMissilePower = 0;
     }
 
     // Xe chết: tắt collider + đóng băng để không rơi xuyên đất. Gọi lặp lại vô hại.

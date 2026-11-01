@@ -165,6 +165,8 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
         // THÊM DÒNG NÀY: Bắt phím E để bắn tên lửa
         data.isFirePressed = Input.GetKey(KeyCode.E);
 
+        data.missilePower = NetworkCarController.LocalMissilePower;
+
         // Đóng gói và đẩy dữ liệu vào đường truyền mạng của Fusion
         input.Set(data);
     }

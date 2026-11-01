@@ -5,15 +5,15 @@ using Fusion;
 public class NetworkMissile : NetworkBehaviour
 {
     [Header("Flight")]
-    public float speed = 40f;               // m/s (trung bình)
-    public float minFlightTime = 0.6f;
+    public float speed = 100f;               // m/s (trung bình)
+    public float minFlightTime = 0.2f;
     public float arcHeightRatio = 0.3f;     // độ cao đỉnh cung = khoảng cách x tỉ lệ này
     public float maxArcHeight = 25f;
     public LayerMask impactMask;            // Drivable + TrackWall. Để 0 = chỉ nổ khi tới hồng tâm
 
     [Header("Explosion")]
-    public float explosionRadius = 9f;
-    public float carDamage = 60f;
+    public float explosionRadius = 15f;
+    public float carDamage = 80f;
     public float cargoDamage = 150f;
     [Range(0f, 1f)] public float edgeDamageRatio = 0.4f; // sát thương ở mép = tỉ lệ này
     public float pushVelocity = 10f;
