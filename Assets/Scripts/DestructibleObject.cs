@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 public class DestructibleObject : MonoBehaviour
 {
@@ -70,6 +71,26 @@ public class DestructibleObject : MonoBehaviour
             rb.gameObject.AddComponent<DebrisOptimizer>();
         }
 
-        Destroy(gameObject);
+        gameObject.SetActive(false);
     }
+
+    public static readonly List<DestructibleObject> All = new List<DestructibleObject>();
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() { All.Clear(); }
+
+    void Awake() { All.Add(this); }
+    void OnDestroy() { All.Remove(this); }
+
+    public static void ResetAll()
+    {
+        for (int i = 0; i < All.Count; i++) All[i].ResetWall();
+    }
+
+    void ResetWall()
+    {
+        isBroken = false;
+        if (!gameObject.activeSelf) gameObject.SetActive(true);
+    }
+
 }

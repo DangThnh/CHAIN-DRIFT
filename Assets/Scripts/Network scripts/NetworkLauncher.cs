@@ -51,27 +51,31 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     async void StartGame(GameMode mode)
     {
+        if (_runner != null) return;   // chặn bấm hai lần
 
         _runner = gameObject.AddComponent<NetworkRunner>();
         _runner.ProvideInput = true;
 
         var scene = SceneRef.FromIndex(SceneManager.GetActiveScene().buildIndex);
-        var sceneInfo = new NetworkSceneInfo();
-        if (scene.IsValid)
-        {
-            sceneInfo.AddSceneRef(scene, LoadSceneMode.Single);
-        }
 
-        await _runner.StartGame(new StartGameArgs()
+        var sceneMgr = GetComponent<NetworkSceneManagerDefault>();
+        if (sceneMgr == null) sceneMgr = gameObject.AddComponent<NetworkSceneManagerDefault>();
+
+        var result = await _runner.StartGame(new StartGameArgs()
         {
-            PlayerCount = 8,
             GameMode = mode,
             SessionName = "ChainDrift_Room",
             Scene = scene,
-            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
+            SceneManager = sceneMgr,
+            PlayerCount = 8
         });
 
-        // (ĐÃ XÓA ĐOẠN SPAWN Ở ĐÂY ĐỂ TRÁNH BỊ SCENE NUỐT MẤT)
+        if (!result.Ok)
+        {
+            Debug.LogWarning("[NET] Vào phòng thất bại: " + result.ShutdownReason + ". Thử lại sau vài giây.");
+            Destroy(_runner);
+            _runner = null;
+        }
     }
 
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)

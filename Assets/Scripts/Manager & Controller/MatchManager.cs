@@ -10,6 +10,7 @@ public struct PlayerSlot : INetworkStruct
     public NetworkBool Ready;
     public NetworkBool InMatch;   // true = đang có xe trong ván này
     public NetworkBool IsHunter;
+
 }
 
 public class MatchManager : NetworkBehaviour
@@ -27,6 +28,8 @@ public class MatchManager : NetworkBehaviour
 
     [Header("Debug (TẠM, xóa ở C3)")]
     public KeyCode debugEndKey = KeyCode.F9;
+
+    private MatchState lastState = (MatchState)255;   // 255 = chưa khởi tạo
 
     [Networked] public MatchState State { get; set; }
     [Networked] public PlayerRef HostPlayer { get; set; }
@@ -62,6 +65,12 @@ public class MatchManager : NetworkBehaviour
 
     public override void Render()
     {
+        if (State != lastState)
+        {
+            lastState = State;
+            DestructibleObject.ResetAll();   // mỗi máy tự hồi tường của mình
+        }
+
         // TẠM: Host bấm F9 để kết thúc ván
         if (Object.HasStateAuthority && Input.GetKeyDown(debugEndKey)) ServerEndMatch();
     }

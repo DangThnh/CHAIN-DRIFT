@@ -156,7 +156,11 @@ public class NetworkCarController : NetworkBehaviour
     // Biến để ngắm chuột
     private Camera mainCam;
 
+    //biến tĩnh lưu danh sách tất cả xe trên scene để người trong chế độ inspector xem
+    public static readonly List<NetworkCarController> All = new List<NetworkCarController>();
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() { All.Clear(); }
 
 
     [Header("Anti-Rollover")]
@@ -240,6 +244,8 @@ public class NetworkCarController : NetworkBehaviour
         }
 
         mainCam = Camera.main; // Lấy camera chính để phóng tia ngắm bắn
+
+        if (!All.Contains(this)) All.Add(this);
     }
 
     public override void FixedUpdateNetwork()
@@ -1116,10 +1122,12 @@ public class NetworkCarController : NetworkBehaviour
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.TransformPoint(drillTipLocalOffset), drillRadius);
     }
+
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
         if (blinkMat != null) Destroy(blinkMat);
         if (HasInputAuthority) LocalMissilePower = 0;
+        All.Remove(this);
     }
 
     // Xe chết: tắt collider + đóng băng để không rơi xuyên đất. Gọi lặp lại vô hại.

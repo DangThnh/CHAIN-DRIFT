@@ -75,6 +75,22 @@ public class CarCameraController : MonoBehaviour
         smoothedY = carTarget.position.y;
     }
 
+    [HideInInspector] public bool isSpectating;
+
+    public void SetSpectateTarget(Transform t)
+    {
+        SetTarget(t);
+        isSpectating = true;
+    }
+
+    public void StopSpectating()
+    {
+        isSpectating = false;
+        carTarget = null;
+        carRb = null;
+        carNetworkCtrl = null;
+    }
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.C))
@@ -109,7 +125,7 @@ public class CarCameraController : MonoBehaviour
         // =======================================================
         // ĐIỀU KHIỂN CHUỘT (CHẾ ĐỘ TỰ DO BẮN SÚNG)
         // =======================================================
-        if (carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead)
+        if (!isSpectating && carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead)
         {
             if (Cursor.lockState == CursorLockMode.Locked)
             {
@@ -148,7 +164,7 @@ public class CarCameraController : MonoBehaviour
         float finalDistance = currentTargetDistance + (speedRatio * extraDistanceAtMaxSpeed);
         float finalHeight = currentTargetHeight;
 
-        bool isAiming = carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead;
+        bool isAiming = !isSpectating && carNetworkCtrl != null && carNetworkCtrl.IsArmed && !carNetworkCtrl.IsDead;
 
         // =======================================================
         // TOÁN HỌC ĐỊNH VỊ CAMERA MỚI (TRIỆT TIÊU LỖI LỘN 180 ĐỘ)
