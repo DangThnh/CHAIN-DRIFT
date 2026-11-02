@@ -23,9 +23,12 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
     [Tooltip("Phe mặc định của máy Chủ (Host)")]
     public NetworkCarController.PlayerTeam hostTeam = NetworkCarController.PlayerTeam.Defender;
 
+
     public enum TestMode { SameTeam, HostVsClient }
     [Tooltip("Chế độ Test: Cùng phe hay Đối đầu?")]
     public TestMode teamTestMode = TestMode.HostVsClient;
+
+    public bool useLobbyFlow = true;   // true: MatchManager lo spawn. false: về luồng cũ
 
     private void OnGUI()
     {
@@ -48,6 +51,7 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     async void StartGame(GameMode mode)
     {
+
         _runner = gameObject.AddComponent<NetworkRunner>();
         _runner.ProvideInput = true;
 
@@ -60,6 +64,7 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
         await _runner.StartGame(new StartGameArgs()
         {
+            PlayerCount = 8,
             GameMode = mode,
             SessionName = "ChainDrift_Room",
             Scene = scene,
@@ -71,6 +76,8 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
     {
+        if (useLobbyFlow) return;   // MatchManager lo việc spawn xe và Cargo
+
         if (runner.IsServer)
         {
             Debug.Log($"Người chơi {player} đã vào phòng! Đang tạo nhân vật...");
