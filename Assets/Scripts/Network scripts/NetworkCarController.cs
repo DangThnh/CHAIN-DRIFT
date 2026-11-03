@@ -146,12 +146,15 @@ public class NetworkCarController : NetworkBehaviour
     private bool fireInput, lastFireInput;
     private int trackHint;
 
+   
 
     // BIẾN MẠNG: Lưu vị trí mà đầu nòng súng đang nhắm tới để mọi máy cùng thấy
     [Networked] public Vector3 NetGunLookTarget { get; set; }
     [Networked] public NetworkBool IsArmed { get; set; }
     private float gunTimer = 0f;
     private float nextFireTime = 0f;
+
+    [System.NonSerialized] public NetworkTowController tow;
 
     // Biến để ngắm chuột
     private Camera mainCam;
@@ -246,6 +249,8 @@ public class NetworkCarController : NetworkBehaviour
         mainCam = Camera.main; // Lấy camera chính để phóng tia ngắm bắn
 
         if (!All.Contains(this)) All.Add(this);
+
+        tow = GetComponent<NetworkTowController>();
     }
 
     public override void FixedUpdateNetwork()
@@ -1151,6 +1156,11 @@ public class NetworkCarController : NetworkBehaviour
         HasMissile = false;
         // Mốc A (Drill) và Mốc B (Missile) sẽ thêm dòng vào đây.
 
+    }
 
+    // Server gọi khi xe trở thành người kéo: người kéo không được dùng kỹ năng
+    public void ServerClearPowerUps()
+    {
+        if (Object.HasStateAuthority) ClearAllPowerUps();
     }
 }

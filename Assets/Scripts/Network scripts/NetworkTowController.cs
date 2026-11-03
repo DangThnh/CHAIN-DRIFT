@@ -1,5 +1,6 @@
-using UnityEngine;
 using Fusion;
+//using UnityEditor.EditorTools;
+using UnityEngine;
 
 [RequireComponent(typeof(LineRenderer))]
 public class NetworkTowController : NetworkBehaviour
@@ -33,6 +34,18 @@ public class NetworkTowController : NetworkBehaviour
         if (activeJoint != null) Destroy(activeJoint);
     }
 
+    [Networked] public TickTimer TowTimer { get; set; }
+
+    public void ServerRelease()
+    {
+        if (Object.HasStateAuthority) DetachRope();
+    }
+
+    public void ServerSetTimer(float seconds)
+    {
+        TowTimer = TickTimer.CreateFromSeconds(Runner, seconds);
+    }
+
     public override void FixedUpdateNetwork()
     {
         // Chỉ thằng nào lái xe mới có quyền bấm nút
@@ -54,60 +67,62 @@ public class NetworkTowController : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
     public void RPC_ToggleRope()
     {
-        // Phải kiểm tra biến activeJoint thay vì biến mạng
+        NetworkCarController myCar = GetComponent<NetworkCarController>();
+        if (myCar != null && myCar.IsDead) return;
+        TowManager tm = TowManager.Instance;
+
         if (activeJoint == null)
-            TryAttachRope();
+        {
+            if (tm != null && !tm.ServerCanAttach(myCar)) return;
+            if (TryAttachRope() && tm != null) tm.ServerOnAttached(myCar);
+        }
         else
+        {
+            if (tm != null && !tm.ServerCanDetach(myCar))
+            {
+                Debug.Log("[TOW] Người kéo duy nhất không được tháo dây.");
+                return;
+            }
             DetachRope();
+        }
     }
 
-    void TryAttachRope()
+    bool TryAttachRope()
     {
         NetworkCarController myCar = GetComponent<NetworkCarController>();
         if (myCar != null && myCar.MyTeam == NetworkCarController.PlayerTeam.Hunter)
         {
             Debug.Log(">> TỪ CHỐI: Phe Phá Đám không được phép kéo hàng! <<");
-            return; // Thoát hàm ngay lập tức
+            return false;
         }
 
         Collider[] hitColliders = Physics.OverlapSphere(transform.position, attachRadius);
         foreach (var hit in hitColliders)
         {
-            // Kiểm tra chặt: Phải là Cargo, có Rigidbody, và KHÔNG ĐƯỢC CHỨA SPRING JOINT NÀO KHÁC
             if (hit.CompareTag("Cargo") && hit.attachedRigidbody != null)
             {
                 NetworkObject cargoNetObj = hit.GetComponentInParent<NetworkObject>();
+                if (cargoNetObj == null) continue;
 
-                if (cargoNetObj != null)
-                {
-                    AttachedCargo = cargoNetObj;
+                AttachedCargo = cargoNetObj;
 
-                    // Tạo Joint mới 100% bằng code
-                    activeJoint = gameObject.AddComponent<SpringJoint>();
-                    activeJoint.connectedBody = hit.attachedRigidbody;
+                activeJoint = gameObject.AddComponent<SpringJoint>();
+                activeJoint.connectedBody = hit.attachedRigidbody;
+                activeJoint.autoConfigureConnectedAnchor = false;
+                activeJoint.connectedAnchor = Vector3.zero;
+                activeJoint.anchor = Vector3.zero;
+                activeJoint.maxDistance = maxRopeLength;
+                activeJoint.minDistance = 3f;
+                activeJoint.spring = springForce;
+                activeJoint.damper = springDamper;
+                activeJoint.enableCollision = true;
 
-                    // NẾU LỖI VẪN XẢY RA, LÀ DO 2 DÒNG NÀY ĐANG ĐÁNH LỘN VỚI NHAU:
-                    // Ta phải set Anchor về 0 trước, rồi mới bật Auto Configure
-                    activeJoint.autoConfigureConnectedAnchor = false;
-                    activeJoint.connectedAnchor = Vector3.zero; // Gắn vào giữa khối hàng
-                    activeJoint.anchor = Vector3.zero; // Gắn vào giữa thân xe kéo
-
-                    // Thiết lập vật lý dây
-                    activeJoint.maxDistance = maxRopeLength;
-                    activeJoint.minDistance = 3f; // Chống hút dính: Không cho kéo quá gần 5 mét
-                    activeJoint.spring = springForce;
-                    activeJoint.damper = springDamper;
-                    activeJoint.enableCollision = true;
-
-                    if (myCar != null) myCar.IsTowingCargo = true;
-
-                    Debug.Log(">> SERVER: ĐÃ KẾT NỐI DÂY XÍCH THÀNH CÔNG! <<");
-                    break;
-
-                }
-                //GetComponent<NetworkCarController>().IsTowingCargo = true;
+                if (myCar != null) myCar.IsTowingCargo = true;
+                Debug.Log(">> SERVER: ĐÃ KẾT NỐI DÂY XÍCH THÀNH CÔNG! <<");
+                return true;
             }
         }
+        return false;
     }
 
     void DetachRope()
@@ -115,11 +130,14 @@ public class NetworkTowController : NetworkBehaviour
         if (activeJoint != null)
         {
             Destroy(activeJoint);
+            activeJoint = null;   // để lần nối tiếp theo trong cùng frame không bị nhầm
         }
         AttachedCargo = null;
-        Debug.Log(">> SERVER: ĐÃ THÁO DÂY XÍCH! <<");
+        TowTimer = default;
 
-        GetComponent<NetworkCarController>().IsTowingCargo = false;
+        NetworkCarController car = GetComponent<NetworkCarController>();
+        if (car != null) car.IsTowingCargo = false;
+        Debug.Log(">> SERVER: ĐÃ THÁO DÂY XÍCH! <<");
     }
 
     public override void Render()

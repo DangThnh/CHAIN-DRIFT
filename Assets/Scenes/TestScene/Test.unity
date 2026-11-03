@@ -8729,6 +8729,8 @@ GameObject:
   - component: {fileID: 1258158060}
   - component: {fileID: 1258158059}
   - component: {fileID: 1258158063}
+  - component: {fileID: 1258158065}
+  - component: {fileID: 1258158064}
   m_Layer: 0
   m_Name: MATCH_MANAGER
   m_TagString: Untagged
@@ -8785,6 +8787,7 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 1258158060}
+  - {fileID: 1258158065}
   ForceRemoteRenderTimeframe: 0
 --- !u!4 &1258158062
 Transform:
@@ -8814,6 +8817,37 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpectatorController
   cam: {fileID: 0}
+--- !u!114 &1258158064
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1258158058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c64eda876f8f294a9da1cbbb88fcb29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TowHUD
+--- !u!114 &1258158065
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1258158058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61d0fc4e39d86c845aa30a94660fdc47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TowManager
+  towDuration: 25
+  warningSeconds: 8
+  initialGraceSeconds: 15
+  needGraceSeconds: 10
+  penaltyDps: 20
+  maxTowers: 2
+  _Phase: 0
 --- !u!1 &1293169114
 GameObject:
   m_ObjectHideFlags: 0

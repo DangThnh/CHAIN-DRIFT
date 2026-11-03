@@ -30,6 +30,7 @@ public class MatchManager : NetworkBehaviour
     public KeyCode debugEndKey = KeyCode.F9;
 
     private MatchState lastState = (MatchState)255;   // 255 = chưa khởi tạo
+    private TowManager towManager;
 
     [Networked] public MatchState State { get; set; }
     [Networked] public PlayerRef HostPlayer { get; set; }
@@ -42,6 +43,8 @@ public class MatchManager : NetworkBehaviour
 
     public override void Spawned()
     {
+        towManager = GetComponent<TowManager>();
+
         Instance = this;
         if (launcher == null) launcher = FindFirstObjectByType<NetworkLauncher>();
         if (Object.HasStateAuthority)
@@ -218,6 +221,8 @@ public class MatchManager : NetworkBehaviour
         cargoObj = Runner.Spawn(launcher.cargoPrefab, cargoPos, Quaternion.identity);
 
         State = MatchState.Playing;
+        if (towManager != null) towManager.ServerOnMatchStart();
+
         Debug.Log($"[MATCH] Bắt đầu: {n} người, {hunters} Hunter, {n - hunters} Defender.");
     }
 
@@ -240,6 +245,9 @@ public class MatchManager : NetworkBehaviour
             s.InMatch = false; s.Ready = false; s.IsHunter = false;
             Slots.Set(i, s);
         }
+
+        if (towManager != null) towManager.ServerOnMatchEnd();
+
         State = MatchState.Lobby;
         Debug.Log("[MATCH] Ván kết thúc, về sảnh chờ.");
     }

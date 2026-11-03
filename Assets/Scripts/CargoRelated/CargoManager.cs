@@ -27,10 +27,17 @@ public class CargoManager : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_TakeDamage(float damage)
     {
-        if (CurrentHealth <= 0) return; // Đã chết rồi thì thôi
+        ServerDamage(damage, true);
+    }
+
+    // Gọi trực tiếp trên server. log = false cho sát thương liên tục để khỏi spam Console.
+    public void ServerDamage(float damage, bool log = true)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (CurrentHealth <= 0) return;
 
         CurrentHealth -= damage;
-        Debug.Log($">> CARGO BỊ TẤN CÔNG! Máu còn: {CurrentHealth}/{maxHealth} <<");
+        if (log) Debug.Log($">> CARGO BỊ TẤN CÔNG! Máu còn: {CurrentHealth}/{maxHealth} <<");
 
         if (CurrentHealth <= 0)
         {
