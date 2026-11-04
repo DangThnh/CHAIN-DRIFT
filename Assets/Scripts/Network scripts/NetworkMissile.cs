@@ -35,10 +35,13 @@ public class NetworkMissile : NetworkBehaviour
 
     private readonly Collider[] hits = new Collider[32];
     private readonly HashSet<Component> handled = new HashSet<Component>();
-
     // Gọi trong onBeforeSpawned (chỉ server)
-    public void Init(Vector3 start, Vector3 target, NetworkCarController.PlayerTeam team, int startTick, float tickDelta)
+
+    private PlayerRef ownerPlayer;
+
+    public void Init(Vector3 start, Vector3 target, NetworkCarController.PlayerTeam team, PlayerRef owner, int startTick, float tickDelta)
     {
+        ownerPlayer = owner;
         StartPos = start;
         TargetPos = target;
         OwnerTeam = team;
@@ -102,7 +105,13 @@ public class NetworkMissile : NetworkBehaviour
             if (car != null)
             {
                 if (!handled.Add(car) || car.IsDead) continue;
-                if (car.MyTeam != OwnerTeam) car.RPC_TakeDamage(carDamage * dmgScale); // cùng phe = 0 sát thương
+                if (car.MyTeam != OwnerTeam)
+                {
+                    float carDmg = carDamage * dmgScale;
+                    car.RPC_TakeDamage(carDmg);
+                    MatchStats.AddEnemyDamage(ownerPlayer, OwnerTeam, car, carDmg);
+                } // cùng phe = 0 sát thương
+
                 Rigidbody rb = car.GetComponent<Rigidbody>();
                 if (rb != null) rb.AddExplosionForce(pushVelocity, center, explosionRadius, pushUpward, ForceMode.VelocityChange);
                 continue;
@@ -110,7 +119,11 @@ public class NetworkMissile : NetworkBehaviour
 
             CargoManager cargo = c.GetComponentInParent<CargoManager>();
             if (cargo != null && handled.Add(cargo) && OwnerTeam == NetworkCarController.PlayerTeam.Hunter)
-                cargo.RPC_TakeDamage(cargoDamage * dmgScale);
+            {
+                float cargoDmg = cargoDamage * dmgScale;
+                cargo.RPC_TakeDamage(cargoDmg);
+                MatchStats.AddCargoDamage(ownerPlayer, cargoDmg);
+            }
         }
     }
 

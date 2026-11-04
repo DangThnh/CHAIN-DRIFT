@@ -76,6 +76,14 @@ public class SpectatorController : MonoBehaviour
 
     void OnGUI()
     {
+        Color old = GUI.contentColor;
+        GUI.contentColor = Color.black;
+        DrawGUI();
+        GUI.contentColor = old;
+    }
+
+    void DrawGUI()
+    {
         if (!wasSpectating) return;
         string who = "(chưa có xe nào)";
         if (IsValid(current))

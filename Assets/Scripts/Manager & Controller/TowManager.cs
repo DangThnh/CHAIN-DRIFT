@@ -32,6 +32,13 @@ public class TowManager : NetworkBehaviour
     {
         if (!Object.HasStateAuthority || Phase == TowPhase.Off) return;
 
+        var all = NetworkCarController.All;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var c = all[i];
+            if (IsLive(c) && c.IsTowingCargo) MatchStats.AddTow(c.Object.InputAuthority, Runner.DeltaTime);
+        }
+
         CountTowers(out int towers, out NetworkCarController sole);
 
         // A. Mất hết người kéo (chết, thoát phòng, hết giờ)

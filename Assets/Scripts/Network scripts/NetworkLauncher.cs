@@ -30,7 +30,15 @@ public class NetworkLauncher : MonoBehaviour, INetworkRunnerCallbacks
 
     public bool useLobbyFlow = true;   // true: MatchManager lo spawn. false: về luồng cũ
 
-    private void OnGUI()
+    void OnGUI()
+    {
+        Color old = GUI.contentColor;
+        GUI.contentColor = Color.black;
+        DrawGUI();
+        GUI.contentColor = old;
+    }
+
+    private void DrawGUI()
     {
         if (_runner == null)
         {

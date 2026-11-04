@@ -51,6 +51,8 @@ public class CargoManager : NetworkBehaviour
         // LOGIC KHI PHE PHÁ ĐÁM THẮNG
         Debug.Log("<color=red><b>BÙMMMM! KHỐI HÀNG ĐÃ BỊ PHÁ HỦY! PHE PHÁ ĐÁM CHIẾN THẮNG!</b></color>");
         // Sau này ta sẽ gọi hiệu ứng Particle Nổ khổng lồ ở đây
+
+        if (MatchManager.Instance != null) MatchManager.Instance.ServerOnCargoDestroyed();
     }
 
     public override void Render()

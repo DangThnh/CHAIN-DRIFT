@@ -92,6 +92,13 @@ public class NetworkCarController : NetworkBehaviour
     private float armorTimer = 0f;
     private float originalMass;
 
+    //Drift Part
+    [Header("Drift (thống kê & boost C4)")]
+    public float driftMinSpeedKmh = 25f;   // Dưới tốc độ này, giữ Space không tính là drift
+
+    // Drift thật: giữ Space, chạm đất, đủ tốc độ, còn sống
+    public bool IsRealDrifting => isDrifting && groundedWheels > 0 && currentSpeedKmh >= driftMinSpeedKmh && !IsDead;
+
     //POWER UP SUNG!!!
     [Header("Power-Ups: GUNS")]
     public GameObject crosshairUI; // Kéo cục Image Crosshair ngoài Canvas vào đây
@@ -253,6 +260,15 @@ public class NetworkCarController : NetworkBehaviour
         tow = GetComponent<NetworkTowController>();
     }
 
+    void StatEnemyDamage(NetworkCarController victim, float dmg)
+    {
+        if (Object.HasStateAuthority) MatchStats.AddEnemyDamage(Object.InputAuthority, MyTeam, victim, dmg);
+    }
+
+    void StatCargoDamage(float dmg)
+    {
+        if (Object.HasStateAuthority) MatchStats.AddCargoDamage(Object.InputAuthority, dmg);
+    }
     public override void FixedUpdateNetwork()
     {
         ApplyAliveState(!IsDead);
@@ -347,6 +363,9 @@ public class NetworkCarController : NetworkBehaviour
                 rb.AddForceAtPosition(transform.up * force, rayPoints[i].position);
             }
         }
+
+        if (Object.HasStateAuthority && IsRealDrifting)
+            MatchStats.AddDrift(Object.InputAuthority, Runner.DeltaTime);
 
         // Chỉ tác động lực lái khi xe đã tiếp đất
         if (groundedWheels > 0)
@@ -829,6 +848,7 @@ public class NetworkCarController : NetworkBehaviour
                     {
                         float damage = impactForce * 10f;
                         cargo.RPC_TakeDamage(damage);
+                        StatCargoDamage(damage);
                     }
                     else
                     {
@@ -854,6 +874,7 @@ public class NetworkCarController : NetworkBehaviour
                     {
                         // Gây sát thương nặng (Tốc độ x 2)
                         enemyCar.RPC_TakeDamage(impactForce * 2f);
+                        StatEnemyDamage(enemyCar, impactForce * 2f);
 
                         // Lực đẩy xe tăng xé gió
                         rb.AddForce(transform.forward * (acceleration * 2f), ForceMode.Impulse);
@@ -1003,6 +1024,7 @@ public class NetworkCarController : NetworkBehaviour
                 if (MyTeam == PlayerTeam.Hunter)
                 {
                     cargo.RPC_TakeDamage(gunDamage);
+                    StatCargoDamage(gunDamage);
                     Debug.Log("<color=yellow><b>>> TRÚNG CARGO! ĐÃ TRỪ MÁU! <<</b></color>");
                 }
                 else
@@ -1018,6 +1040,7 @@ public class NetworkCarController : NetworkBehaviour
                 if (hitCar.MyTeam != this.MyTeam)
                 {
                     hitCar.RPC_TakeDamage(gunDamage);
+                    StatEnemyDamage(hitCar, gunDamage);
                     Debug.Log($"<color=red><b>>> [CHÍ MẠNG] BẮN TRÚNG ĐỐI THỦ {hitCar.MyTeam}! ĐÃ TRỪ {gunDamage} HP! <<</b></color>");
                 }
                 else
@@ -1075,14 +1098,14 @@ public class NetworkCarController : NetworkBehaviour
             if (car != null)
             {
                 if (car == this || car.IsDead || car.IsArmored || car.MyTeam == MyTeam) continue;
-                if (drillAlreadyHit.Add(car)) car.RPC_TakeDamage(dmg);
+                if (drillAlreadyHit.Add(car)) { car.RPC_TakeDamage(dmg); StatEnemyDamage(car, dmg); }
                 continue;
             }
 
             CargoManager cargo = c.GetComponentInParent<CargoManager>();
             if (cargo != null && MyTeam == PlayerTeam.Hunter && drillAlreadyHit.Add(cargo))
             {
-                cargo.RPC_TakeDamage(dmg);
+                { cargo.RPC_TakeDamage(dmg); StatCargoDamage(dmg); }
             }
         }
     }
@@ -1102,6 +1125,8 @@ public class NetworkCarController : NetworkBehaviour
     // CHỈ chạy trên StateAuthority
     void ServerFireMissile()
     {
+        PlayerRef owner = Object.InputAuthority;
+
         if (!TryGetMissileTarget(missilePowerInput, out Vector3 target))
         {
             Debug.LogWarning("[MISSILE] Không có TrackPath trong scene, chưa bắn được.");
@@ -1117,7 +1142,8 @@ public class NetworkCarController : NetworkBehaviour
         float dt = Runner.DeltaTime;
         Runner.Spawn(missilePrefab, start, rot, null, (runner, obj) =>
         {
-            obj.GetComponent<NetworkMissile>().Init(start, target, team, tick, dt);
+
+            obj.GetComponent<NetworkMissile>().Init(start, target, team, owner, tick, dt);
         });
     }
 
@@ -1163,4 +1189,6 @@ public class NetworkCarController : NetworkBehaviour
     {
         if (Object.HasStateAuthority) ClearAllPowerUps();
     }
+
+
 }

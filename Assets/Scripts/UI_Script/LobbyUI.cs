@@ -4,7 +4,16 @@ using Fusion;
 // Sảnh chờ TẠM bằng IMGUI. Giai đoạn 5 thay bằng uGUI (avatar Steam, giao diện đẹp).
 public class LobbyUI : MonoBehaviour
 {
+
     void OnGUI()
+    {
+        Color old = GUI.contentColor;
+        GUI.contentColor = Color.black;
+        DrawGUI();
+        GUI.contentColor = old;
+    }
+
+    void DrawGUI()
     {
         MatchManager m = MatchManager.Instance;
         if (m == null || m.Runner == null) return;
@@ -21,6 +30,8 @@ public class LobbyUI : MonoBehaviour
             if (iAmHost) GUI.Label(new Rect(20, 85, 400, 25), "[F9] Kết thúc ván (tạm)");
             return;
         }
+
+        if (m.State == MatchState.Result) return;   // ResultUI vẽ scoreboard
 
         float x = 20f, y = 70f;
         GUI.Box(new Rect(x, y, 330, 40 + MatchManager.MaxSlots * 24), "SẢNH CHỜ");

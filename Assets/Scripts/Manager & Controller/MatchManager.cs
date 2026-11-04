@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using Fusion;
 
-public enum MatchState : byte { Lobby = 0, Playing = 1 }
+public enum MatchState : byte { Lobby = 0, Playing = 1, Result = 2 }
+public enum WinReason : byte { None = 0, CargoReachedFinish = 1, CargoDestroyed = 2, Debug = 3 }
 
 public struct PlayerSlot : INetworkStruct
 {
@@ -11,6 +12,17 @@ public struct PlayerSlot : INetworkStruct
     public NetworkBool InMatch;   // true = đang có xe trong ván này
     public NetworkBool IsHunter;
 
+}
+public struct PlayerStat : INetworkStruct
+{
+    public PlayerRef Player;
+    public NetworkBool IsHunter;
+    public float DmgEnemy;
+    public float DmgCargo;
+    public float DriftSec;
+    public float TowSec;
+    public float Escort;
+    public float Score;
 }
 
 public class MatchManager : NetworkBehaviour
@@ -35,6 +47,25 @@ public class MatchManager : NetworkBehaviour
     [Networked] public MatchState State { get; set; }
     [Networked] public PlayerRef HostPlayer { get; set; }
     [Networked, Capacity(MaxSlots)] private NetworkArray<PlayerSlot> Slots => default;
+
+    [Header("Win conditions")]
+    public float finishDistance = 10f;   // Cargo cách đích dưới số mét này thì Defender thắng
+    public float resultSeconds = 30f;    // Thời gian hiện scoreboard
+    public int finishCheckTicks = 5;
+
+    [Networked] public NetworkCarController.PlayerTeam WinnerTeam { get; set; }
+    [Networked] public byte WinReasonCode { get; set; }
+    [Networked] public float MatchSeconds { get; set; }
+    [Networked] public PlayerRef MvpPlayer { get; set; }
+    [Networked] private TickTimer ResultTimer { get; set; }
+    [Networked, Capacity(MaxSlots)] private NetworkArray<PlayerStat> ResultStats => default;
+
+    private int matchStartTick;
+    private int finishHint;
+    private bool trackWarned;
+
+    public NetworkObject CargoObject => cargoObj;
+    public float ResultSecondsLeft => ResultTimer.RemainingTime(Runner) ?? 0f;
 
     // Chỉ dùng trên server
     private readonly Dictionary<PlayerRef, NetworkObject> cars = new Dictionary<PlayerRef, NetworkObject>();
@@ -62,8 +93,52 @@ public class MatchManager : NetworkBehaviour
     public override void FixedUpdateNetwork()
     {
         if (!Object.HasStateAuthority) return;
+
+        if (State == MatchState.Playing) CheckWinConditions();
+        else if (State == MatchState.Result && ResultTimer.Expired(Runner)) ReturnToLobby();
+
         if (Runner.Tick.Raw % Mathf.Max(1, rosterSyncTicks) != 0) return;
         SyncRoster();
+    }
+
+    void CheckWinConditions()
+    {
+        if (cargoObj == null || !cargoObj.IsValid) return;
+        if (Runner.Tick.Raw % Mathf.Max(1, finishCheckTicks) != 0) return;
+
+        TrackPath tp = TrackPath.Instance;
+        if (tp == null || tp.Length <= 0f)
+        {
+            if (!trackWarned) { trackWarned = true; Debug.LogWarning("[MATCH] Không có TrackPath, không xét được vạch đích."); }
+            return;
+        }
+        float d = tp.ProjectDistance(cargoObj.transform.position, ref finishHint);
+        if (d >= tp.Length - finishDistance)
+            ServerFinishMatch(NetworkCarController.PlayerTeam.Defender, WinReason.CargoReachedFinish);
+    }
+
+    public void ServerOnCargoDestroyed()
+    {
+        ServerFinishMatch(NetworkCarController.PlayerTeam.Hunter, WinReason.CargoDestroyed);
+    }
+
+    public void RequestReturnToLobby()
+    {
+        if (Object.HasStateAuthority && State == MatchState.Result) ReturnToLobby();
+    }
+
+    void ReturnToLobby()
+    {
+        State = MatchState.Lobby;
+        Debug.Log("[MATCH] Về sảnh chờ.");
+    }
+
+    public bool TryGetResultStat(int i, out PlayerStat s)
+    {
+        s = default;
+        if (i < 0 || i >= MaxSlots) return false;
+        s = ResultStats[i];
+        return !s.Player.IsNone;
     }
 
     public override void Render()
@@ -75,7 +150,8 @@ public class MatchManager : NetworkBehaviour
         }
 
         // TẠM: Host bấm F9 để kết thúc ván
-        if (Object.HasStateAuthority && Input.GetKeyDown(debugEndKey)) ServerEndMatch();
+        if (Object.HasStateAuthority && Input.GetKeyDown(debugEndKey))
+            ServerFinishMatch(NetworkCarController.PlayerTeam.Defender, WinReason.Debug);
     }
 
     // ---------------- Danh sách người chơi (server) ----------------
@@ -220,6 +296,11 @@ public class MatchManager : NetworkBehaviour
         Vector3 cargoPos = launcher.cargoSpawnPoint != null ? launcher.cargoSpawnPoint.position : new Vector3(0, 2, 20);
         cargoObj = Runner.Spawn(launcher.cargoPrefab, cargoPos, Quaternion.identity);
 
+        matchStartTick = Runner.Tick.Raw;
+        finishHint = 0;
+        trackWarned = false;
+        MatchStats.Reset();
+
         State = MatchState.Playing;
         if (towManager != null) towManager.ServerOnMatchStart();
 
@@ -227,9 +308,14 @@ public class MatchManager : NetworkBehaviour
     }
 
     // Kết thúc ván: hủy xe + Cargo, về sảnh chờ. C3 sẽ gọi hàm này khi có người thắng.
-    public void ServerEndMatch()
+    public void ServerFinishMatch(NetworkCarController.PlayerTeam winner, WinReason reason)
     {
         if (!Object.HasStateAuthority || State != MatchState.Playing) return;
+
+        MatchSeconds = (Runner.Tick.Raw - matchStartTick) * Runner.DeltaTime;
+        WinnerTeam = winner;
+        WinReasonCode = (byte)reason;
+        BuildResults();   // phải chạy TRƯỚC khi reset Slots bên dưới
 
         foreach (var kv in cars)
             if (kv.Value != null) Runner.Despawn(kv.Value);
@@ -248,8 +334,37 @@ public class MatchManager : NetworkBehaviour
 
         if (towManager != null) towManager.ServerOnMatchEnd();
 
-        State = MatchState.Lobby;
-        Debug.Log("[MATCH] Ván kết thúc, về sảnh chờ.");
+        ResultTimer = TickTimer.CreateFromSeconds(Runner, resultSeconds);
+        State = MatchState.Result;
+        Debug.Log($"[MATCH] Ván kết thúc. Phe thắng: {winner}, lý do: {reason}, {MatchSeconds:0.0}s.");
+    }
+
+    void BuildResults()
+    {
+        var players = new List<PlayerRef>();
+        var hunters = new List<bool>();
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            PlayerSlot s = Slots[i];
+            if (s.Player.IsNone || !s.InMatch) continue;
+            players.Add(s.Player);
+            hunters.Add(s.IsHunter);
+        }
+
+        PlayerStat[] stats = MatchStats.Build(players, hunters);
+        for (int i = 0; i < MaxSlots; i++)
+            ResultStats.Set(i, i < stats.Length ? stats[i] : default);
+
+        // MVP = điểm cao nhất trong phe thắng
+        bool winnerIsHunter = WinnerTeam == NetworkCarController.PlayerTeam.Hunter;
+        float best = -1f;
+        PlayerRef mvp = default;
+        for (int i = 0; i < stats.Length; i++)
+        {
+            if (stats[i].IsHunter != winnerIsHunter) continue;
+            if (stats[i].Score > best) { best = stats[i].Score; mvp = stats[i].Player; }
+        }
+        MvpPlayer = mvp;
     }
 
     void GetSpawn(int k, out Vector3 pos, out Quaternion rot)
