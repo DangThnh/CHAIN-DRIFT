@@ -8960,6 +8960,7 @@ GameObject:
   - component: {fileID: 1258158065}
   - component: {fileID: 1258158064}
   - component: {fileID: 1258158066}
+  - component: {fileID: 1258158067}
   m_Layer: 0
   m_Name: MATCH_MANAGER
   m_TagString: Untagged
@@ -9098,6 +9099,18 @@ MonoBehaviour:
   headlineSeconds: 3
   mvpSeconds: 4
   columnInterval: 1.2
+--- !u!114 &1258158067
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1258158058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0901bbc12000c50498a682dcd40674aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BoostHUD
 --- !u!1 &1293169114
 GameObject:
   m_ObjectHideFlags: 0

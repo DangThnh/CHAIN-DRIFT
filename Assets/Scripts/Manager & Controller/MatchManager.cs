@@ -21,6 +21,7 @@ public struct PlayerStat : INetworkStruct
     public float DmgCargo;
     public float DriftSec;
     public float TowSec;
+    public float Guardian;   // TRƯỚC: public float Escort;
     public float Escort;
     public float Score;
 }
@@ -57,6 +58,7 @@ public class MatchManager : NetworkBehaviour
     [Networked] public byte WinReasonCode { get; set; }
     [Networked] public float MatchSeconds { get; set; }
     [Networked] public PlayerRef MvpPlayer { get; set; }
+    [Networked] public PlayerRef BestLoserPlayer { get; set; }
     [Networked] private TickTimer ResultTimer { get; set; }
     [Networked, Capacity(MaxSlots)] private NetworkArray<PlayerStat> ResultStats => default;
 
@@ -355,16 +357,23 @@ public class MatchManager : NetworkBehaviour
         for (int i = 0; i < MaxSlots; i++)
             ResultStats.Set(i, i < stats.Length ? stats[i] : default);
 
-        // MVP = điểm cao nhất trong phe thắng
+        // MVP = điểm cao nhất phe thắng. BestLoser = điểm cao nhất phe thua.
         bool winnerIsHunter = WinnerTeam == NetworkCarController.PlayerTeam.Hunter;
-        float best = -1f;
-        PlayerRef mvp = default;
+        float bestW = -1f, bestL = -1f;
+        PlayerRef mvp = default, loser = default;
         for (int i = 0; i < stats.Length; i++)
         {
-            if (stats[i].IsHunter != winnerIsHunter) continue;
-            if (stats[i].Score > best) { best = stats[i].Score; mvp = stats[i].Player; }
+            if (stats[i].IsHunter == winnerIsHunter)
+            {
+                if (stats[i].Score > bestW) { bestW = stats[i].Score; mvp = stats[i].Player; }
+            }
+            else
+            {
+                if (stats[i].Score > bestL) { bestL = stats[i].Score; loser = stats[i].Player; }
+            }
         }
         MvpPlayer = mvp;
+        BestLoserPlayer = loser;
     }
 
     void GetSpawn(int k, out Vector3 pos, out Quaternion rot)

@@ -1513,6 +1513,10 @@ MonoBehaviour:
   armorMaterial: {fileID: 2100000, guid: fdeae8401ebecd041aa8ec73d7463503, type: 2}
   _IsArmored:
     RawValue: 0
+  driftMinSpeedKmh: 25
+  driftSecondsToFull: 5
+  boostDebugLog: 1
+  _DriftCharge: 0
   crosshairUI: {fileID: 4902179841844739271}
   gunTurretObj: {fileID: 7611702678249049980}
   gunFirePoint: {fileID: 3329362803543722483}
@@ -1566,6 +1570,12 @@ MonoBehaviour:
   _IsDead:
     RawValue: 0
   respawnDelay: 2
+  guardianCargoRadius: 3
+  guardianArmorRadius: 6
+  guardianArmorLookahead: 25
+  guardianArmorScale: 1
+  guardianDrillReach: 6
+  guardianDebugLog: 1
 --- !u!114 &8463299411808601177
 MonoBehaviour:
   m_ObjectHideFlags: 0

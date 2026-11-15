@@ -10,7 +10,7 @@ public class ResultUI : MonoBehaviour
     public float columnInterval = 1.2f;
 
     static readonly string[] Titles =
-    { "SÁT THƯƠNG LÊN ĐỊCH", "SÁT THƯƠNG LÊN XE HÀNG", "THỜI GIAN DRIFT", "THỜI GIAN KÉO HÀNG", "HỘ TỐNG" };
+    { "SÁT THƯƠNG LÊN ĐỊCH", "SÁT THƯƠNG LÊN XE HÀNG", "THỜI GIAN DRIFT", "THỜI GIAN KÉO HÀNG", "BẢO VỆ XE HÀNG" };
 
     private readonly List<PlayerStat> all = new List<PlayerStat>();
     private readonly List<PlayerStat>[] columns = new List<PlayerStat>[5];
@@ -26,7 +26,7 @@ public class ResultUI : MonoBehaviour
             case 1: return s.DmgCargo;
             case 2: return s.DriftSec;
             case 3: return s.TowSec;
-            default: return s.Escort;
+            default: return s.Guardian;
         }
     }
 
@@ -132,6 +132,14 @@ public class ResultUI : MonoBehaviour
                     break;
                 }
             GUI.Label(new Rect(0, 150, w, 40), mvp, big);
+            if (!m.BestLoserPlayer.IsNone)
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i].Player == m.BestLoserPlayer)
+                    {
+                        GUI.Label(new Rect(0, 190, w, 30),
+                            $"Xuất sắc nhất phe thua: Người chơi {all[i].Player.RawEncoded} - {all[i].Score:0.0} điểm", mid);
+                        break;
+                    }
         }
 
         // 3. Các cột chỉ số, lần lượt hiện ra

@@ -13,13 +13,19 @@ public class PlayerHP_UI : MonoBehaviour
 
     void Update()
     {
-        // Quét tìm xe của chính mình nếu chưa thấy
+        if (hpSlider == null) return;
+
+        // Xe đã bị hủy (hết ván, thoát phòng): bỏ tham chiếu, KHÔNG đọc biến [Networked]
+        if (myCar != null && !myCar.IsReady) myCar = null;
+
+        // Tìm xe của chính mình trong danh sách tĩnh (không cấp phát bộ nhớ)
         if (myCar == null)
         {
-            NetworkCarController[] allCars = FindObjectsOfType<NetworkCarController>();
-            foreach (var car in allCars)
+            var all = NetworkCarController.All;
+            for (int i = 0; i < all.Count; i++)
             {
-                if (car.HasInputAuthority) // Đúng xe của tôi cầm lái!
+                var car = all[i];
+                if (car != null && car.IsReady && car.HasInputAuthority)
                 {
                     myCar = car;
                     hpSlider.maxValue = myCar.maxHealth;
@@ -28,10 +34,6 @@ public class PlayerHP_UI : MonoBehaviour
             }
         }
 
-        // Cập nhật máu liên tục
-        if (myCar != null)
-        {
-            hpSlider.value = myCar.CurrentHealth;
-        }
+        hpSlider.value = myCar != null ? myCar.CurrentHealth : 0f;
     }
 }

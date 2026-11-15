@@ -93,6 +93,8 @@ public class CarCameraController : MonoBehaviour
 
     void Update()
     {
+        if (carNetworkCtrl != null && !carNetworkCtrl.IsReady) ReleaseTarget();
+
         if (Input.GetKeyDown(KeyCode.C))
         {
             if (cameraViews != null && cameraViews.Length > 1)
@@ -146,6 +148,8 @@ public class CarCameraController : MonoBehaviour
 
     void LateUpdate()
     {
+        if (carNetworkCtrl != null && !carNetworkCtrl.IsReady) ReleaseTarget();
+
         if (!carTarget || !carRb) return;
 
         if (cameraViews != null && cameraViews.Length > 0)
@@ -212,5 +216,12 @@ public class CarCameraController : MonoBehaviour
         {
             mainCam.fieldOfView = Mathf.Lerp(minFOV, maxFOV, speedRatio);
         }
+    }
+
+    void ReleaseTarget()
+    {
+        carTarget = null;
+        carRb = null;
+        carNetworkCtrl = null;
     }
 }

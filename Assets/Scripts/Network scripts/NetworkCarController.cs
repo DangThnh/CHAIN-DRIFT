@@ -79,6 +79,9 @@ public class NetworkCarController : NetworkBehaviour
     private Material blinkMat;      // 1 instance duy nhất, tạo lười khi cần
     private Material blinkSource;
 
+    // false khi xe chưa Spawned hoặc đã bị despawn: lúc đó KHÔNG được đọc biến [Networked]
+    public bool IsReady => Object != null && Object.IsValid;
+
     //POWER UP BOC GIAP!!!
     [Header("Power-Ups: ENHANCE (Juggernaut)")]
     public GameObject armorMesh;        // Kéo cái Armor_Mesh vừa tạo vào đây
@@ -95,6 +98,21 @@ public class NetworkCarController : NetworkBehaviour
     //Drift Part
     [Header("Drift (thống kê & boost C4)")]
     public float driftMinSpeedKmh = 25f;   // Dưới tốc độ này, giữ Space không tính là drift
+
+    [Header("Drift Boost (C4)")]
+    public float driftSecondsToFull = 20f;   // Số giây drift thật để đầy thanh. Test: đặt tạm 5
+    public bool boostDebugLog = true;        // TẠM: tắt sau khi test
+
+    [Networked] public float DriftCharge { get; set; }   // 0..1
+
+    static readonly PowerUpBox.PowerUpType[] boostPool =
+    {
+    PowerUpBox.PowerUpType.Armor, PowerUpBox.PowerUpType.Gun,
+    PowerUpBox.PowerUpType.Drill, PowerUpBox.PowerUpType.Missile
+};
+
+    public bool HasAnyPowerUp => IsArmored || IsArmed || IsDrilling || HasMissile;
+    public string PowerUpName => IsArmored ? "Giáp" : IsArmed ? "Súng" : IsDrilling ? "Mũi khoan" : HasMissile ? "Tên lửa" : "";
 
     // Drift thật: giữ Space, chạm đất, đủ tốc độ, còn sống
     public bool IsRealDrifting => isDrifting && groundedWheels > 0 && currentSpeedKmh >= driftMinSpeedKmh && !IsDead;
@@ -207,6 +225,14 @@ public class NetworkCarController : NetworkBehaviour
     // Biến lưu trữ Material gốc để làm hiệu ứng nhấp nháy đỏ
     private Material currentBlinkColor;
 
+    [Header("Guardian (thống kê)")]
+    public float guardianCargoRadius = 3f;      // Đạn, khoan: độ lệch ngang tối đa so với đường đòn đánh
+    public float guardianArmorRadius = 6f;      // Giáp: xe không chạy thẳng tắp nên cho rộng hơn
+    public float guardianArmorLookahead = 25f;  // Giáp: Cargo phải nằm trong khoảng này phía sau xe bị húc
+    public float guardianArmorScale = 1f;       // Giáp: nhân điểm, hạ xuống nếu giáp áp đảo cột này
+    public float guardianDrillReach = 6f;       // Khoan: Cargo phải nằm trong khoảng này phía trước mũi khoan
+    public bool guardianDebugLog = true;        // TẠM: tắt sau khi test
+
     public override void Spawned()
     {
         rb = GetComponent<Rigidbody>();
@@ -263,6 +289,31 @@ public class NetworkCarController : NetworkBehaviour
     void StatEnemyDamage(NetworkCarController victim, float dmg)
     {
         if (Object.HasStateAuthority) MatchStats.AddEnemyDamage(Object.InputAuthority, MyTeam, victim, dmg);
+    }
+
+
+    // Server: ghi điểm Guardian cho 'blocker' (Defender) nếu Cargo nằm sau nó trên hướng đòn đánh.
+    // startDist/maxDist đo từ 'origin' dọc theo 'dir'. Cargo phải nằm trong khoảng đó.
+    void CreditGuardianIfShielding(NetworkCarController blocker, Vector3 origin, Vector3 dir,
+                                   float startDist, float maxDist, float radius, float amount, string tag)
+    {
+        if (!Object.HasStateAuthority) return;
+        if (MyTeam != PlayerTeam.Hunter || blocker == null || blocker.MyTeam != PlayerTeam.Defender) return;
+        if (amount <= 0f || dir.sqrMagnitude < 1e-6f) return;
+
+        MatchManager mm = MatchManager.Instance;
+        if (mm == null || mm.CargoObject == null || !mm.CargoObject.IsValid) return;
+
+        dir.Normalize();
+        Vector3 toCargo = mm.CargoObject.transform.position - origin;
+        float along = Vector3.Dot(toCargo, dir);
+        if (along <= startDist || along > maxDist) return;
+        float side = (toCargo - dir * along).magnitude;
+        if (side > radius) return;
+
+        MatchStats.AddGuardian(blocker.Object.InputAuthority, amount);
+        if (guardianDebugLog)
+            Debug.Log($"[GUARDIAN-{tag}] Player {blocker.Object.InputAuthority.RawEncoded} chặn ~{amount:0} máu xe hàng");
     }
 
     void StatCargoDamage(float dmg)
@@ -364,8 +415,12 @@ public class NetworkCarController : NetworkBehaviour
             }
         }
 
-        if (Object.HasStateAuthority && IsRealDrifting)
-            MatchStats.AddDrift(Object.InputAuthority, Runner.DeltaTime);
+        if (Object.HasStateAuthority)
+        {
+            bool realDrift = IsRealDrifting;
+            if (realDrift) MatchStats.AddDrift(Object.InputAuthority, Runner.DeltaTime);
+            ServerBoostTick(realDrift);
+        }
 
         // Chỉ tác động lực lái khi xe đã tiếp đất
         if (groundedWheels > 0)
@@ -876,6 +931,12 @@ public class NetworkCarController : NetworkBehaviour
                         enemyCar.RPC_TakeDamage(impactForce * 2f);
                         StatEnemyDamage(enemyCar, impactForce * 2f);
 
+                        Vector3 toBlocker = enemyCar.transform.position - transform.position;
+                        float blockDist = toBlocker.magnitude;
+                        CreditGuardianIfShielding(enemyCar, transform.position, toBlocker, blockDist,
+                            blockDist + guardianArmorLookahead, guardianArmorRadius,
+                            impactForce * 10f * guardianArmorScale, "ARMOR");
+
                         // Lực đẩy xe tăng xé gió
                         rb.AddForce(transform.forward * (acceleration * 2f), ForceMode.Impulse);
                         Debug.Log(">> BỌC THÉP HÚC VĂNG KẺ THÙ! <<");
@@ -917,6 +978,7 @@ public class NetworkCarController : NetworkBehaviour
         respawnTimer = respawnDelay;
 
         ClearAllPowerUps();
+        DriftCharge = 0f;
         ApplyAliveState(false);
 
         // NẾU ĐANG KÉO HÀNG MÀ CHẾT -> ÉP ĐỨT DÂY XÍCH NGAY LẬP TỨC!
@@ -1041,6 +1103,7 @@ public class NetworkCarController : NetworkBehaviour
                 {
                     hitCar.RPC_TakeDamage(gunDamage);
                     StatEnemyDamage(hitCar, gunDamage);
+                    CreditGuardianIfShielding(hitCar, rayStart, direction, hit.distance, 200f, guardianCargoRadius, gunDamage, "GUN");
                     Debug.Log($"<color=red><b>>> [CHÍ MẠNG] BẮN TRÚNG ĐỐI THỦ {hitCar.MyTeam}! ĐÃ TRỪ {gunDamage} HP! <<</b></color>");
                 }
                 else
@@ -1089,6 +1152,11 @@ public class NetworkCarController : NetworkBehaviour
         Vector3 tip = transform.TransformPoint(drillTipLocalOffset);
         int n = Physics.OverlapSphereNonAlloc(tip, drillRadius, drillHits, ~0, QueryTriggerInteraction.Ignore);
 
+        // Mũi khoan đang chạm thẳng Cargo thì không xe nào đang chắn được gì
+        bool cargoTouched = false;
+        for (int i = 0; i < n; i++)
+            if (drillHits[i].GetComponentInParent<CargoManager>() != null) { cargoTouched = true; break; }
+
         drillAlreadyHit.Clear();
         for (int i = 0; i < n; i++)
         {
@@ -1098,14 +1166,22 @@ public class NetworkCarController : NetworkBehaviour
             if (car != null)
             {
                 if (car == this || car.IsDead || car.IsArmored || car.MyTeam == MyTeam) continue;
-                if (drillAlreadyHit.Add(car)) { car.RPC_TakeDamage(dmg); StatEnemyDamage(car, dmg); }
+                if (drillAlreadyHit.Add(car))
+                {
+                    car.RPC_TakeDamage(dmg);
+                    StatEnemyDamage(car, dmg);
+                    if (!cargoTouched)
+                        CreditGuardianIfShielding(car, tip, transform.forward, 0f,
+                            guardianDrillReach, guardianCargoRadius, dmg, "DRILL");
+                }
                 continue;
             }
 
             CargoManager cargo = c.GetComponentInParent<CargoManager>();
             if (cargo != null && MyTeam == PlayerTeam.Hunter && drillAlreadyHit.Add(cargo))
             {
-                { cargo.RPC_TakeDamage(dmg); StatCargoDamage(dmg); }
+                cargo.RPC_TakeDamage(dmg);
+                StatCargoDamage(dmg);
             }
         }
     }
@@ -1145,6 +1221,25 @@ public class NetworkCarController : NetworkBehaviour
 
             obj.GetComponent<NetworkMissile>().Init(start, target, team, owner, tick, dt);
         });
+    }
+
+    void ServerBoostTick(bool realDrift)
+    {
+        if (!realDrift) return;
+        if (HasAnyPowerUp || IsTowingCargo) return;   // tạm dừng, giữ nguyên giá trị đã tích
+
+        MatchManager mm = MatchManager.Instance;
+        if (mm != null && mm.State != MatchState.Playing) return;
+
+        DriftCharge += Runner.DeltaTime / Mathf.Max(1f, driftSecondsToFull);
+        if (DriftCharge >= 1f)
+        {
+            DriftCharge = 0f;
+            PowerUpBox.PowerUpType type = boostPool[UnityEngine.Random.Range(0, boostPool.Length)];
+            GivePowerUp(type);
+            if (boostDebugLog)
+                Debug.Log($"[BOOST] Player {Object.InputAuthority.RawEncoded} nhận power-up ngẫu nhiên: {type}");
+        }
     }
 
     // Vẽ vùng chạm khi chọn xe trong Scene/Game view lúc chạy, để chỉnh drillTipLocalOffset
