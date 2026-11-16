@@ -71,6 +71,7 @@ public class NetworkCarController : NetworkBehaviour
     private float visualSteerInput = 0f;
     private float pitchInertiaMultiplier = 0f;
     private float lastMoveInput = 0f;
+    private DriftSmoke driftSmoke;
 
     // --- Bước 0: trạng thái sống/chết & material nhấp nháy ---
     private Collider bodyCollider;
@@ -114,8 +115,12 @@ public class NetworkCarController : NetworkBehaviour
     public bool HasAnyPowerUp => IsArmored || IsArmed || IsDrilling || HasMissile;
     public string PowerUpName => IsArmored ? "Giáp" : IsArmed ? "Súng" : IsDrilling ? "Mũi khoan" : HasMissile ? "Tên lửa" : "";
 
-    // Drift thật: giữ Space, chạm đất, đủ tốc độ, còn sống
-    public bool IsRealDrifting => isDrifting && groundedWheels > 0 && currentSpeedKmh >= driftMinSpeedKmh && !IsDead;
+    // Drift thật: giữ Space, đánh lái, chạm đất, đủ tốc độ, còn sống
+    public float driftMinSteer = 0.1f;   // Phải đánh lái ít nhất chừng này (0..1) mới tính là drift
+
+    public bool IsRealDrifting =>
+        isDrifting && Mathf.Abs(steerInput) >= driftMinSteer
+        && groundedWheels > 0 && currentSpeedKmh >= driftMinSpeedKmh && !IsDead;
 
     //POWER UP SUNG!!!
     [Header("Power-Ups: GUNS")]
@@ -284,6 +289,7 @@ public class NetworkCarController : NetworkBehaviour
         if (!All.Contains(this)) All.Add(this);
 
         tow = GetComponent<NetworkTowController>();
+        driftSmoke = GetComponent<DriftSmoke>();
     }
 
     void StatEnemyDamage(NetworkCarController victim, float dmg)
@@ -778,6 +784,7 @@ public class NetworkCarController : NetworkBehaviour
 
                     // ĐÓNG DẤU CHÍNH XÁC TẠI ĐIỂM TIẾP XÚC CỦA BÁNH SAU
                     lastSkidmarkIndices[i] = SkidmarkManager.Instance.AddSkidMark(hit.point, hit.normal, intensity, lastSkidmarkIndices[i]);
+                    if (driftSmoke != null) driftSmoke.Emit(i, hit.point, hit.normal, intensity);
                 }
                 else
                 {

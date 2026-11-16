@@ -1242,6 +1242,7 @@ GameObject:
   - component: {fileID: -2043353801183118446}
   - component: {fileID: 8463299411808601177}
   - component: {fileID: 7662605139088635413}
+  - component: {fileID: 1502571481232229758}
   m_Layer: 0
   m_Name: PlayerCar2
   m_TagString: Untagged
@@ -1517,6 +1518,7 @@ MonoBehaviour:
   driftSecondsToFull: 5
   boostDebugLog: 1
   _DriftCharge: 0
+  driftMinSteer: 0.1
   crosshairUI: {fileID: 4902179841844739271}
   gunTurretObj: {fileID: 7611702678249049980}
   gunFirePoint: {fileID: 3329362803543722483}
@@ -1613,6 +1615,39 @@ MonoBehaviour:
   SyncScale: 0
   SyncParent: 0
   _interpolationTarget: {fileID: 2137593478732946132}
+--- !u!114 &1502571481232229758
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6836311823009984888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07e546b66eefe974f852d88a6dc0b7fc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DriftSmoke
+  flatMaterial: {fileID: 2100000, guid: 560ebeddaed1d264b80179c527aeefed, type: 2}
+  blobMaterial: {fileID: 2100000, guid: fa0cb5099c2b23d4d8f015753cf544cd, type: 2}
+  smokeLight: {r: 1, g: 0.97, b: 0.9, a: 1}
+  smokeShade: {r: 0.78, g: 0.84, b: 0.95, a: 1}
+  spikeColor: {r: 1, g: 1, b: 1, a: 1}
+  blobRate: 14
+  blobSize: {x: 0.55, y: 0.95}
+  blobLifetime: 0.7
+  blobRise: 1.1
+  blobSpread: 0.7
+  blobInheritVelocity: 0.15
+  jagRate: 24
+  jagSize: {x: 1.1, y: 1.8}
+  jagLifetime: 0.28
+  jagSpeed: 2.2
+  spikeRate: 12
+  spikeBurstOnStart: 6
+  spikeSize: {x: 0.7, y: 1.2}
+  spikeLifetime: 0.2
+  spikeSpeed: 7
+  steppedMotion: 1
 --- !u!1 &6950972757797226424
 GameObject:
   m_ObjectHideFlags: 0
