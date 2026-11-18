@@ -1627,26 +1627,57 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 07e546b66eefe974f852d88a6dc0b7fc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DriftSmoke
+  vfxEnabled: 1
   flatMaterial: {fileID: 2100000, guid: 560ebeddaed1d264b80179c527aeefed, type: 2}
   blobMaterial: {fileID: 2100000, guid: fa0cb5099c2b23d4d8f015753cf544cd, type: 2}
   smokeLight: {r: 1, g: 0.97, b: 0.9, a: 1}
-  smokeShade: {r: 0.78, g: 0.84, b: 0.95, a: 1}
-  spikeColor: {r: 1, g: 1, b: 1, a: 1}
-  blobRate: 14
-  blobSize: {x: 0.55, y: 0.95}
+  smokeShade: {r: 0.72, g: 0.8, b: 0.94, a: 1}
+  finColor: {r: 1, g: 1, b: 1, a: 1}
+  impactColor: {r: 1, g: 1, b: 1, a: 1}
+  smokeSteps: 3
+  smokeDitherStrength: 1
+  ditherPixelScale: 1
+  minSpeedKmh: 25
+  maxSpeedKmh: 120
+  blobRadius: {x: 0.35, y: 0.65}
+  blobSpacing: 0.8
+  blobMinRate: 6
   blobLifetime: 0.7
-  blobRise: 1.1
-  blobSpread: 0.7
-  blobInheritVelocity: 0.15
-  jagRate: 24
-  jagSize: {x: 1.1, y: 1.8}
-  jagLifetime: 0.28
-  jagSpeed: 2.2
-  spikeRate: 12
-  spikeBurstOnStart: 6
-  spikeSize: {x: 0.7, y: 1.2}
-  spikeLifetime: 0.2
-  spikeSpeed: 7
+  blobRise: 1
+  blobSpread: 0.6
+  blobDrag: 1.2
+  blobInheritVelocity: 0.1
+  maxBlobsPerWheel: 22
+  smokeGoo: 0.3
+  smokeCell: 0.3
+  smokeCullDistance: 80
+  smokeUpdateEvery: 2
+  finMinTeeth: 5
+  finMaxTeeth: 11
+  finMinSpacing: 0.3
+  toothLengthMul: {x: 0.95, y: 1.35}
+  toothHeight: {x: 0.35, y: 0.7}
+  finOverhang: 0.35
+  finLifetime: 0.3
+  finSideOffset: 0
+  finLift: 0.04
+  finDither: 0.6
+  impactTexture: {fileID: 2800000, guid: 2062d2c347c977c4ebc461592029f0b8, type: 3}
+  impactSheetColumns: 1
+  impactSheetRows: 1
+  impactMode: 0
+  impactLengthScale: 1.8
+  impactVelocityScale: 0.04
+  impactRotation: {x: 0, y: 360}
+  impactBurstOnStart: 2
+  impactRate: 6
+  impactSize: {x: 0.9, y: 1.5}
+  impactLifetime: 0.25
+  impactBackSpeed: 6
+  impactInheritVelocity: 0.6
+  impactSideOffset: 0.1
+  impactBackOffset: 0.35
+  impactUpOffset: 0.3
   steppedMotion: 1
 --- !u!1 &6950972757797226424
 GameObject:

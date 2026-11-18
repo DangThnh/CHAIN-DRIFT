@@ -8997,7 +8997,7 @@ MonoBehaviour:
   forceOneHunterWhenTwo: 1
   rosterSyncTicks: 10
   debugEndKey: 290
-  _State: 0
+  _State: 1
   finishDistance: 600
   resultSeconds: 30
   finishCheckTicks: 5
